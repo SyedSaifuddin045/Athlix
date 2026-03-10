@@ -10,5 +10,8 @@
             "database": "app_db",
             "username": "postgres"
         }
+    ],
+    "python.analysis.extraPaths": [
+        "./app/core"
     ]
 }
