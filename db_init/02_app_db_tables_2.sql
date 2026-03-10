@@ -1,0 +1,210 @@
+\connect "app_db";
+SET search_path TO app_schema;
+
+-- ============================================================
+-- USERS
+-- ============================================================
+CREATE TABLE "app_schema"."users" (
+    "id"            SERIAL PRIMARY KEY,
+    "username"      TEXT NOT NULL UNIQUE,
+    "email"         TEXT NOT NULL UNIQUE,
+    "password_hash" TEXT NOT NULL,
+    "created_at"    TIMESTAMPTZ DEFAULT NOW(),
+    "updated_at"    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- USER PROFILE
+-- body stats for accurate volume/load recommendations
+-- ============================================================
+CREATE TABLE "app_schema"."user_profiles" (
+    "id"              SERIAL PRIMARY KEY,
+    "user_id"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "display_name"    TEXT,
+    "date_of_birth"   DATE,
+    "gender"          TEXT CHECK (gender IN ('male', 'female', 'other')),
+    "height_cm"       NUMERIC(5,2),
+    "weight_kg"       NUMERIC(5,2),
+    "fitness_level"   TEXT CHECK (fitness_level IN ('beginner', 'intermediate', 'advanced')),
+    "preferred_unit"  TEXT DEFAULT 'kg' CHECK (preferred_unit IN ('kg', 'lbs')),
+    "created_at"      TIMESTAMPTZ DEFAULT NOW(),
+    "updated_at"      TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT "user_profiles_user_id_key" UNIQUE (user_id)
+);
+
+-- ============================================================
+-- BODY WEIGHT LOG
+-- track bodyweight over time (used in bodyweight exercise loads)
+-- ============================================================
+CREATE TABLE "app_schema"."body_weight_logs" (
+    "id"          SERIAL PRIMARY KEY,
+    "user_id"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "weight_kg"   NUMERIC(5,2) NOT NULL,
+    "logged_at"   DATE NOT NULL DEFAULT CURRENT_DATE,
+    "notes"       TEXT,
+    CONSTRAINT "body_weight_logs_user_date_key" UNIQUE (user_id, logged_at)
+);
+
+-- ============================================================
+-- WORKOUT TEMPLATES
+-- reusable workout plans (Push Day, Pull Day, etc.)
+-- ============================================================
+CREATE TABLE "app_schema"."workout_templates" (
+    "id"          SERIAL PRIMARY KEY,
+    "user_id"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "name"        TEXT NOT NULL,
+    "description" TEXT,
+    "is_public"   BOOLEAN DEFAULT FALSE,
+    "created_at"  TIMESTAMPTZ DEFAULT NOW(),
+    "updated_at"  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- exercises planned inside a template (ordered)
+CREATE TABLE "app_schema"."workout_template_exercises" (
+    "id"             SERIAL PRIMARY KEY,
+    "template_id"    INTEGER NOT NULL REFERENCES workout_templates(id) ON DELETE CASCADE,
+    "exercise_id"    TEXT NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+    "order_index"    INTEGER NOT NULL,           -- display order in the template
+    "target_sets"    INTEGER,
+    "target_reps"    INTEGER,
+    "target_rpe"     NUMERIC(3,1),               -- target RPE (1.0–10.0)
+    "rest_seconds"   INTEGER,                    -- recommended rest between sets
+    "notes"          TEXT
+);
+
+-- ============================================================
+-- WORKOUT SESSIONS
+-- one row per gym visit
+-- ============================================================
+CREATE TABLE "app_schema"."workout_sessions" (
+    "id"                  SERIAL PRIMARY KEY,
+    "user_id"             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "template_id"         INTEGER REFERENCES workout_templates(id) ON DELETE SET NULL,
+    "name"                TEXT,                  -- e.g. "Push Day A"
+    "started_at"          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "finished_at"         TIMESTAMPTZ,
+    "duration_minutes"    INTEGER                -- computed on finish
+        GENERATED ALWAYS AS (
+            CASE
+                WHEN finished_at IS NOT NULL
+                THEN EXTRACT(EPOCH FROM (finished_at - started_at)) / 60
+            END
+        ) STORED,
+    "perceived_exertion"  INTEGER CHECK (perceived_exertion BETWEEN 1 AND 10),
+    "mood"                TEXT CHECK (mood IN ('great', 'good', 'okay', 'bad', 'terrible')),
+    "location"            TEXT,                  -- 'gym', 'home', 'outdoor'
+    "notes"               TEXT,
+    "is_completed"        BOOLEAN DEFAULT FALSE
+);
+
+-- ============================================================
+-- EXERCISE SETS
+-- the atomic unit — one set of one exercise in one session
+-- ============================================================
+CREATE TABLE "app_schema"."exercise_sets" (
+    "id"           SERIAL PRIMARY KEY,
+    "session_id"   INTEGER NOT NULL REFERENCES workout_sessions(id) ON DELETE CASCADE,
+    "exercise_id"  TEXT NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+    "set_number"   INTEGER NOT NULL,
+    "set_type"     TEXT DEFAULT 'working'
+                   CHECK (set_type IN ('warmup', 'working', 'dropset', 'failure', 'backoff')),
+    "reps"         INTEGER,
+    "weight_kg"    NUMERIC(6,2),
+    "duration_sec" INTEGER,                      -- for timed exercises (planks, etc.)
+    "distance_m"   NUMERIC(8,2),                 -- for cardio-type movements
+    "rpe"          NUMERIC(3,1)
+                   CHECK (rpe BETWEEN 1.0 AND 10.0),
+    "is_pr"        BOOLEAN DEFAULT FALSE,        -- flagged by PR detector on session finish
+    "notes"        TEXT,
+    "logged_at"    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- PERSONAL RECORDS
+-- denormalized for fast lookup — recomputed on session finish
+-- ============================================================
+CREATE TABLE "app_schema"."personal_records" (
+    "id"            SERIAL PRIMARY KEY,
+    "user_id"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "exercise_id"   TEXT NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+    "record_type"   TEXT NOT NULL
+                    CHECK (record_type IN (
+                        'estimated_1rm',  -- heaviest estimated 1RM
+                        'max_weight',     -- heaviest single set (any reps)
+                        '1rm',            -- actual 1 rep max
+                        '3rm', '5rm', '8rm', '10rm',
+                        'max_volume',     -- highest volume in a single session
+                        'max_reps'        -- most reps at a given weight
+                    )),
+    "value"         NUMERIC(8,2) NOT NULL,       -- weight in kg OR reps OR volume load
+    "achieved_on"   DATE NOT NULL,
+    "session_id"    INTEGER REFERENCES workout_sessions(id) ON DELETE SET NULL,
+    "set_id"        INTEGER REFERENCES exercise_sets(id) ON DELETE SET NULL,
+    "notes"         TEXT,
+    "created_at"    TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT "personal_records_user_exercise_type_key"
+        UNIQUE (user_id, exercise_id, record_type)   -- only keep current best
+);
+
+-- ============================================================
+-- PERSONAL RECORD HISTORY
+-- full audit trail of every PR ever set (personal_records only keeps latest)
+-- ============================================================
+CREATE TABLE "app_schema"."personal_record_history" (
+    "id"            SERIAL PRIMARY KEY,
+    "user_id"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "exercise_id"   TEXT NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+    "record_type"   TEXT NOT NULL,
+    "value"         NUMERIC(8,2) NOT NULL,
+    "previous_value" NUMERIC(8,2),              -- what it was before this PR
+    "achieved_on"   DATE NOT NULL,
+    "session_id"    INTEGER REFERENCES workout_sessions(id) ON DELETE SET NULL,
+    "created_at"    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- MESOCYCLES / TRAINING BLOCKS
+-- optional: group sessions into structured training phases
+-- ============================================================
+CREATE TABLE "app_schema"."mesocycles" (
+    "id"          SERIAL PRIMARY KEY,
+    "user_id"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "name"        TEXT NOT NULL,                -- "Hypertrophy Block 1"
+    "goal"        TEXT CHECK (goal IN ('strength', 'hypertrophy', 'endurance', 'weight_loss', 'maintenance')),
+    "started_on"  DATE NOT NULL,
+    "ended_on"    DATE,
+    "weeks"       INTEGER,
+    "notes"       TEXT,
+    "created_at"  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- link sessions into a mesocycle
+ALTER TABLE "app_schema"."workout_sessions"
+    ADD COLUMN "mesocycle_id" INTEGER REFERENCES mesocycles(id) ON DELETE SET NULL;
+
+-- ============================================================
+-- INDEXES (performance)
+-- ============================================================
+
+-- fast user session lookups
+CREATE INDEX "idx_sessions_user_id"        ON workout_sessions(user_id);
+CREATE INDEX "idx_sessions_started_at"     ON workout_sessions(started_at DESC);
+CREATE INDEX "idx_sessions_user_date"      ON workout_sessions(user_id, started_at DESC);
+
+-- fast set lookups per session and per exercise
+CREATE INDEX "idx_sets_session_id"         ON exercise_sets(session_id);
+CREATE INDEX "idx_sets_exercise_id"        ON exercise_sets(exercise_id);
+CREATE INDEX "idx_sets_user_exercise"      ON exercise_sets(session_id, exercise_id);
+
+-- fast PR lookups
+CREATE INDEX "idx_prs_user_exercise"       ON personal_records(user_id, exercise_id);
+CREATE INDEX "idx_pr_history_user"         ON personal_record_history(user_id, exercise_id);
+
+-- body weight timeline
+CREATE INDEX "idx_bw_logs_user_date"       ON body_weight_logs(user_id, logged_at DESC);
+
+-- template lookups
+CREATE INDEX "idx_template_exercises"      ON workout_template_exercises(template_id);
+
+-- mesocycle sessions
+CREATE INDEX "idx_sessions_mesocycle"      ON workout_sessions(mesocycle_id);
