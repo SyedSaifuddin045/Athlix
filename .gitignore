@@ -8,5 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
-sql
 .env
+sql/postgres.session.sql
+logs/

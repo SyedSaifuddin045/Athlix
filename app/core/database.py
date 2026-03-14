@@ -4,7 +4,8 @@ from app.core.config import settings
 
 engine = create_engine(
     settings.database_url,
-    pool_pre_ping=True,     # avoids stale connections
+    pool_pre_ping=True,
+    connect_args={"options": "-csearch_path=app_schema"},
     pool_size=10,
     max_overflow=20,
 )

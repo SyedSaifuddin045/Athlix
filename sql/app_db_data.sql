@@ -1,7 +1,5 @@
 -- Adminer 5.4.2 PostgreSQL 16.13 dump
 
-\connect "app_db";
-
 SET search_path TO app_schema;
 
 INSERT INTO "exercises" ("id", "name", "body_part", "equipment", "gif_url", "target") VALUES

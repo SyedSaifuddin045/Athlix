@@ -5,7 +5,7 @@ from sqlalchemy import text
 import logging
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.api.deps import get_db
 
 router = APIRouter(tags=["Health"])
 logger = logging.getLogger(__name__)
