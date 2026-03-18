@@ -35,17 +35,12 @@ from app.schemas.mesocycle import (
     MesocycleDetailResponse,
     MesocycleResponse,
     MesocycleUpdate,
+    SUPPORTED_MESOCYCLE_GOALS,
 )
 
 router = APIRouter(prefix="/mesocycles", tags=["Mesocycles"])
 
-ALLOWED_GOALS = {
-    "strength",
-    "hypertrophy",
-    "endurance",
-    "weight_loss",
-    "maintenance",
-}
+ALLOWED_GOALS = set(SUPPORTED_MESOCYCLE_GOALS)
 
 
 def _utcnow() -> datetime:

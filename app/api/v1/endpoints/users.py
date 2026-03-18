@@ -1,21 +1,33 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.analytics import calculate_workout_streaks
+from app.models.mesocycle import Mesocycle
+from app.models.records import PersonalRecord
 from app.models.user import BodyWeightLog, User, UserProfile
+from app.models.workout import WorkoutSession, WorkoutTemplate
 from app.schemas.body_weight import (
     BodyWeightLogCreate,
     BodyWeightLogResponse,
     BodyWeightLogUpdate,
 )
+from app.schemas.mesocycle import MesocycleResponse
+from app.schemas.personal_record import PersonalRecordResponse
+from app.schemas.progress import WorkoutStreaksResponse
 from app.schemas.user_profile import (
     UserProfileResponse,
     UserProfileUpdate,
 )
 from app.schemas.user_schema import UserResponse, UserUpdate
+from app.schemas.user_overview import (
+    UserOverviewResponse,
+    UserOverviewStatsResponse,
+)
+from app.schemas.workout_session import WorkoutSessionResponse
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -93,6 +105,124 @@ async def update_current_user(
     db.refresh(user)
 
     return UserResponse.model_validate(user)
+
+
+@router.get("/me/overview", response_model=UserOverviewResponse)
+async def get_current_user_overview(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserOverviewResponse:
+    profile = _get_profile(db, current_user.id)
+    latest_body_weight_log = db.execute(
+        select(BodyWeightLog)
+        .where(BodyWeightLog.user_id == current_user.id)
+        .order_by(BodyWeightLog.logged_at.desc(), BodyWeightLog.id.desc())
+    ).scalars().first()
+
+    today = _utcnow().date()
+    active_mesocycle = db.execute(
+        select(Mesocycle)
+        .where(
+            Mesocycle.user_id == current_user.id,
+            Mesocycle.started_on <= today,
+            or_(
+                Mesocycle.ended_on.is_(None),
+                Mesocycle.ended_on >= today,
+            ),
+        )
+        .order_by(Mesocycle.started_on.desc(), Mesocycle.id.desc())
+    ).scalars().first()
+
+    latest_completed_session = db.execute(
+        select(WorkoutSession)
+        .where(
+            WorkoutSession.user_id == current_user.id,
+            WorkoutSession.is_completed.is_(True),
+        )
+        .order_by(WorkoutSession.started_at.desc(), WorkoutSession.id.desc())
+    ).scalars().first()
+
+    recent_personal_records = db.execute(
+        select(PersonalRecord)
+        .where(PersonalRecord.user_id == current_user.id)
+        .order_by(
+            PersonalRecord.achieved_on.desc(),
+            PersonalRecord.created_at.desc(),
+            PersonalRecord.id.desc(),
+        )
+        .limit(5)
+    ).scalars().all()
+
+    completed_session_datetimes = db.execute(
+        select(WorkoutSession.started_at)
+        .where(
+            WorkoutSession.user_id == current_user.id,
+            WorkoutSession.is_completed.is_(True),
+        )
+        .order_by(WorkoutSession.started_at.asc())
+    ).scalars().all()
+    streaks = calculate_workout_streaks(list(completed_session_datetimes))
+
+    total_workout_templates = db.execute(
+        select(func.count())
+        .select_from(WorkoutTemplate)
+        .where(WorkoutTemplate.user_id == current_user.id)
+    ).scalar_one()
+    total_sessions = db.execute(
+        select(func.count())
+        .select_from(WorkoutSession)
+        .where(WorkoutSession.user_id == current_user.id)
+    ).scalar_one()
+    completed_sessions = db.execute(
+        select(func.count())
+        .select_from(WorkoutSession)
+        .where(
+            WorkoutSession.user_id == current_user.id,
+            WorkoutSession.is_completed.is_(True),
+        )
+    ).scalar_one()
+    personal_record_count = db.execute(
+        select(func.count())
+        .select_from(PersonalRecord)
+        .where(PersonalRecord.user_id == current_user.id)
+    ).scalar_one()
+
+    return UserOverviewResponse(
+        user=UserResponse.model_validate(current_user),
+        has_profile=profile is not None,
+        profile=UserProfileResponse.model_validate(profile) if profile is not None else None,
+        latest_body_weight_log=(
+            BodyWeightLogResponse.model_validate(latest_body_weight_log)
+            if latest_body_weight_log is not None
+            else None
+        ),
+        active_mesocycle=(
+            MesocycleResponse.model_validate(active_mesocycle)
+            if active_mesocycle is not None
+            else None
+        ),
+        latest_completed_session=(
+            WorkoutSessionResponse.model_validate(latest_completed_session)
+            if latest_completed_session is not None
+            else None
+        ),
+        recent_personal_records=[
+            PersonalRecordResponse.model_validate(record)
+            for record in recent_personal_records
+        ],
+        workout_streaks=WorkoutStreaksResponse(
+            current_daily_streak=streaks.current_daily_streak,
+            longest_daily_streak=streaks.longest_daily_streak,
+            current_weekly_streak=streaks.current_weekly_streak,
+            longest_weekly_streak=streaks.longest_weekly_streak,
+        ),
+        stats=UserOverviewStatsResponse(
+            total_workout_templates=total_workout_templates,
+            total_sessions=total_sessions,
+            completed_sessions=completed_sessions,
+            personal_record_count=personal_record_count,
+        ),
+    )
 
 
 @router.get("/me/profile", response_model=UserProfileResponse)

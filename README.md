@@ -1,10 +1,35 @@
 # Athelix API
 
-Athelix API is a FastAPI backend for a fitness and workout tracking platform. The project is structured to support athlete and training data management, including users, profiles, exercises, workout templates, workout sessions, mesocycles, bodyweight logs, and personal records.
+Athelix API is a FastAPI backend for workout tracking, athlete progress monitoring, mesocycle planning, and training analytics. It is designed to serve web, mobile, and other client applications with a clean authenticated API, structured domain models, and analytics that can drive dashboards, progress screens, and coaching workflows.
 
-The current codebase provides the application foundation: configuration management, database models, Alembic migrations, a Docker-based PostgreSQL environment, seed scripts, and health/database verification endpoints.
+## What This Backend Covers
 
-## Tech Stack
+The current backend supports the full MVP flow for a personal training app:
+
+- User registration, login, token refresh, and authenticated profile access
+- User profile and bodyweight tracking
+- Exercise catalog browsing with search and filters
+- Workout template planning
+- Workout session logging with per-set tracking
+- Automatic personal record detection
+- Exercise progress analytics
+- Mesocycles as optional training blocks
+- Deload suggestions, muscle balance reports, and block-to-block comparisons
+- Public client bootstrap metadata for frontend/mobile apps
+- Aggregated user overview endpoint for app home/dashboard screens
+
+## Architecture Overview
+
+Core layers in the project:
+
+- `app/api/` contains FastAPI routers and request dependencies
+- `app/core/` contains configuration, database wiring, security, logging, analytics, and PR logic
+- `app/models/` contains SQLAlchemy domain models
+- `app/schemas/` contains Pydantic request/response contracts
+- `alembic/` contains migrations
+- `tests/` contains API, unit, and integration tests
+
+The application currently uses:
 
 - FastAPI
 - SQLAlchemy 2.x
@@ -13,111 +38,111 @@ The current codebase provides the application foundation: configuration manageme
 - Pydantic Settings
 - Uvicorn
 - Pytest
-- Docker Compose
-- `uv` for dependency and command management
+- `uv`
 
-## Current Features
+## API Surface
 
-- FastAPI application bootstrap with environment-based configuration
-- PostgreSQL integration using SQLAlchemy and psycopg
-- Alembic migration support
-- Seed script for exercise data
-- Health and database connectivity endpoints
-- JWT-based authentication with access and refresh tokens
-- Authenticated user profile and bodyweight log endpoints
-- Authenticated exercise catalog endpoints with filtering and detailed exercise metadata
-- Workout tracking endpoints for templates, sessions, sets, and auto-managed personal records
-- Analytics services for e1RM, PR detection, volume load, progressive overload, streaks, deload suggestions, mesocycle comparisons, muscle balance, and progress history
-- Test suite for API, configuration, and database behavior
+### Public endpoints
 
-## Data Model Overview
+- `GET /`
+- `GET /health`
+- `GET /db-test`
+- `GET /db-query`
+- `GET /meta/app-config`
+- `POST /auth/register`
+- `POST /auth/login`
+- `POST /auth/refresh`
 
-The project currently models the main entities needed for a training application:
+### Authenticated endpoints
 
-- Users and user profiles
-- Exercise catalog with instructions and secondary muscles
-- Workout templates and template exercises
-- Workout sessions and logged exercise sets
-- Mesocycles for structured training blocks
-- Bodyweight logs
-- Personal records
+- `GET /auth/me`
+- `GET /users/me`
+- `PATCH /users/me`
+- `GET /users/me/overview`
+- `GET /users/me/profile`
+- `PUT /users/me/profile`
+- `GET /users/me/body-weight-logs`
+- `POST /users/me/body-weight-logs`
+- `GET /users/me/body-weight-logs/{log_id}`
+- `PATCH /users/me/body-weight-logs/{log_id}`
+- `DELETE /users/me/body-weight-logs/{log_id}`
+- `GET /exercises`
+- `GET /exercises/filters`
+- `GET /exercises/{exercise_id}`
+- `GET /workout-templates`
+- `POST /workout-templates`
+- `GET /workout-templates/{template_id}`
+- `PATCH /workout-templates/{template_id}`
+- `DELETE /workout-templates/{template_id}`
+- `GET /workout-templates/{template_id}/exercises`
+- `POST /workout-templates/{template_id}/exercises`
+- `GET /workout-templates/{template_id}/exercises/{template_exercise_id}`
+- `PATCH /workout-templates/{template_id}/exercises/{template_exercise_id}`
+- `DELETE /workout-templates/{template_id}/exercises/{template_exercise_id}`
+- `GET /workout-sessions`
+- `POST /workout-sessions`
+- `GET /workout-sessions/{session_id}`
+- `PATCH /workout-sessions/{session_id}`
+- `DELETE /workout-sessions/{session_id}`
+- `GET /workout-sessions/{session_id}/sets`
+- `POST /workout-sessions/{session_id}/sets`
+- `GET /workout-sessions/{session_id}/sets/{set_id}`
+- `PATCH /workout-sessions/{session_id}/sets/{set_id}`
+- `DELETE /workout-sessions/{session_id}/sets/{set_id}`
+- `GET /personal-records`
+- `GET /personal-records/{record_id}`
+- `GET /progress/{exercise_id}`
+- `GET /analytics/muscle-balance`
+- `GET /mesocycles`
+- `POST /mesocycles`
+- `GET /mesocycles/{mesocycle_id}`
+- `GET /mesocycles/{mesocycle_id}/analytics`
+- `PATCH /mesocycles/{mesocycle_id}`
+- `DELETE /mesocycles/{mesocycle_id}`
 
-## API Endpoints
+## Frontend and Mobile Integration
 
-The currently exposed routes are focused on service validation:
+The backend now includes client-facing integration aids intended to reduce frontend complexity:
 
-- `GET /` - basic welcome response
-- `GET /health` - application health status
-- `GET /db-test` - simple database connectivity check
-- `GET /db-query` - database version/query check
-- `POST /auth/register` - create a user account and issue access/refresh tokens
-- `POST /auth/login` - authenticate a user and issue access/refresh tokens
-- `POST /auth/refresh` - exchange a valid refresh token for a new token pair
-- `GET /auth/me` - return the currently authenticated user
-- `GET /users/me` - return the current authenticated user
-- `PATCH /users/me` - update the current user's username or email
-- `GET /users/me/profile` - fetch the current user's profile
-- `PUT /users/me/profile` - create or update the current user's profile
-- `GET /users/me/body-weight-logs` - list the current user's bodyweight logs
-- `POST /users/me/body-weight-logs` - create a new bodyweight log
-- `GET /users/me/body-weight-logs/{log_id}` - fetch a specific bodyweight log
-- `PATCH /users/me/body-weight-logs/{log_id}` - update a specific bodyweight log
-- `DELETE /users/me/body-weight-logs/{log_id}` - delete a specific bodyweight log
-- `GET /exercises` - list exercises with optional search and filtering
-- `GET /exercises/filters` - list the available body part, equipment, and target filters
-- `GET /exercises/{exercise_id}` - fetch a specific exercise including instructions and secondary muscles
-- `GET /workout-templates` - list the current user's workout templates
-- `POST /workout-templates` - create a workout template
-- `GET /workout-templates/{template_id}` - fetch a workout template with its planned exercises
-- `PATCH /workout-templates/{template_id}` - update a workout template
-- `DELETE /workout-templates/{template_id}` - delete a workout template
-- `GET /workout-templates/{template_id}/exercises` - list exercises planned in a workout template
-- `POST /workout-templates/{template_id}/exercises` - add an exercise to a workout template
-- `GET /workout-templates/{template_id}/exercises/{template_exercise_id}` - fetch a planned template exercise
-- `PATCH /workout-templates/{template_id}/exercises/{template_exercise_id}` - update a planned template exercise
-- `DELETE /workout-templates/{template_id}/exercises/{template_exercise_id}` - remove a planned template exercise
-- `GET /workout-sessions` - list the current user's workout sessions
-- `POST /workout-sessions` - create a workout session
-- `GET /workout-sessions/{session_id}` - fetch a workout session with its logged sets
-- `PATCH /workout-sessions/{session_id}` - update a workout session
-- `DELETE /workout-sessions/{session_id}` - delete a workout session
-- `GET /workout-sessions/{session_id}/sets` - list logged exercise sets for a workout session
-- `POST /workout-sessions/{session_id}/sets` - log an exercise set in a workout session
-- `GET /workout-sessions/{session_id}/sets/{set_id}` - fetch a logged exercise set
-- `PATCH /workout-sessions/{session_id}/sets/{set_id}` - update a logged exercise set
-- `DELETE /workout-sessions/{session_id}/sets/{set_id}` - delete a logged exercise set
-- `GET /personal-records` - list the current user's personal records with optional exercise and type filters
-- `GET /personal-records/{record_id}` - fetch a specific personal record
-- `GET /progress/{exercise_id}` - return exercise progress history including e1RM formulas, volume, overload, and workout streaks
-- `GET /analytics/muscle-balance` - return a muscle group balance report over a recent window or a specific mesocycle
-- `GET /mesocycles` - list the current user's optional mesocycles
-- `POST /mesocycles` - create a mesocycle
-- `GET /mesocycles/{mesocycle_id}` - fetch a mesocycle with linked workout sessions
-- `GET /mesocycles/{mesocycle_id}/analytics` - compare a mesocycle against the previous training block and return deload and muscle-balance insights
-- `PATCH /mesocycles/{mesocycle_id}` - update a mesocycle
-- `DELETE /mesocycles/{mesocycle_id}` - delete a mesocycle
+- Configurable CORS support for local web and hybrid mobile clients
+- `GET /meta/app-config` for bootstrapping app-level client configuration
+- Standardized error metadata with `message`, `status_code`, and `path`
+- `GET /users/me/overview` for home-screen/dashboard aggregation
+- OpenAPI docs at `/docs` and `/redoc`
 
-Interactive API docs are available at:
+Detailed frontend/mobile documentation is available in [docs/FRONTEND_INTEGRATION.md](/mnt/NewVolume/Programming/Python/FastApi_Project/docs/FRONTEND_INTEGRATION.md).
 
-- `http://localhost:8000/docs`
-- `http://localhost:8000/redoc`
+## Authentication Model
 
-## Project Structure
+Authentication is JWT-based:
 
-```text
-app/
-  api/          API routers and endpoints
-  core/         configuration, database, logging
-  models/       SQLAlchemy models
-  schemas/      Pydantic schemas
-alembic/        database migrations
-db_init/        PostgreSQL initialization scripts
-scripts/        local startup and seed scripts
-sql/            SQL seed data
-tests/          automated tests
+- Access token: bearer token for authenticated requests
+- Refresh token: exchanged through `POST /auth/refresh`
+- Access token lifetime is returned by the API in seconds
+- Refresh token lifetime is returned by the API in seconds
+
+Authenticated requests must include:
+
+```http
+Authorization: Bearer <access_token>
 ```
 
-## Local Development Setup
+## Error Contract
+
+Most errors now expose a frontend-friendly structure:
+
+```json
+{
+  "detail": "Workout session not found",
+  "message": "Workout session not found",
+  "status_code": 404,
+  "path": "/workout-sessions/999"
+}
+```
+
+Validation errors also include `field_errors` so clients can map failures to form inputs.
+
+## Local Development
 
 ### Prerequisites
 
@@ -125,31 +150,47 @@ tests/          automated tests
 - `uv`
 - Docker and Docker Compose
 
-### 1. Install dependencies
+### Setup
+
+1. Install dependencies
 
 ```bash
 uv sync
 ```
 
-### 2. Configure environment variables
-
-Copy `.env.example` to `.env` and update the values for your environment:
+2. Create environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Minimum configuration:
+3. Start PostgreSQL, run migrations, and launch the API
+
+```bash
+uv run start
+```
+
+4. Optional database reset and reseed
+
+```bash
+uv run start --reset
+```
+
+Default local URLs:
+
+- API: `http://localhost:8000`
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+- Adminer: `http://localhost:8080`
+
+## Environment Variables
+
+Minimum relevant configuration:
 
 ```env
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=app_db
-POSTGRES_PORT=5432
-POSTGRES_CONTAINER_NAME=postgres_db
-
-ADMINER_PORT=8080
-ADMINER_CONTAINER_NAME=postgres_adminer
+APP_NAME=Athelix API
+APP_VERSION=0.1.0
+DEBUG=True
 
 DATABASE_HOST=localhost
 DATABASE_PORT=5432
@@ -157,36 +198,21 @@ DATABASE_NAME=app_db
 DATABASE_USER=postgres
 DATABASE_PASSWORD=postgres
 
-DEBUG=True
-
 JWT_SECRET_KEY=replace-with-a-long-random-secret-at-least-32-characters
 JWT_REFRESH_SECRET_KEY=replace-with-a-different-long-random-secret
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=7
+
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,capacitor://localhost,ionic://localhost
+CORS_ALLOW_CREDENTIALS=True
+CORS_ALLOWED_METHODS=*
+CORS_ALLOWED_HEADERS=*
 ```
 
-### 3. Start the application stack
+## Database and Migrations
 
-To start PostgreSQL, run migrations, and launch the API:
-
-```bash
-uv run start
-```
-
-To reset the database volume, rebuild the local database state, and reseed exercise data:
-
-```bash
-uv run start --reset
-```
-
-The API will be available at `http://localhost:8000`.
-
-Adminer will be available at `http://localhost:8080`.
-
-## Database Migrations
-
-Apply migrations manually:
+Apply migrations:
 
 ```bash
 uv run alembic upgrade head
@@ -200,24 +226,64 @@ uv run alembic revision --autogenerate -m "describe_change"
 
 ## Running Tests
 
-Run the full test suite:
+Run the full suite:
 
 ```bash
-uv run pytest
+UV_CACHE_DIR=/tmp/uv-cache uv run pytest
 ```
 
-Run only fast unit tests:
+Run a focused suite:
 
 ```bash
-uv run pytest -m "not integration"
+UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_api.py tests/test_users.py
 ```
 
-Run integration tests that require PostgreSQL:
+Note: the repository includes PostgreSQL connectivity tests that require a running database on the configured host and port.
 
-```bash
-uv run pytest -m integration
+## Current Product Review
+
+From an end-user perspective, the backend now covers the expected MVP flows for:
+
+- Account onboarding
+- Profile setup
+- Exercise discovery
+- Training plan creation
+- Session logging
+- Progress review
+- PR visibility
+- Optional structured mesocycle planning
+- Analytics-driven coaching cues
+
+Likely next-phase features, depending on product scope:
+
+- Password reset and email verification
+- Social features or coach-athlete collaboration
+- Notifications and reminders
+- Media/file uploads
+- Admin tooling and moderation
+- Background jobs for heavier analytics or reporting
+- Offline sync conflict resolution for mobile apps
+
+Those are product expansion items rather than obvious gaps in the current MVP backend.
+
+## Project Structure
+
+```text
+app/
+  api/
+  core/
+  models/
+  schemas/
+alembic/
+db_init/
+scripts/
+sql/
+tests/
+docs/
 ```
 
-## Status
+## Documentation
 
-This repository is currently at the backend foundation stage. The database schema and application structure are in place, while the public API surface is still minimal and focused on service health and database verification. It is a solid base for expanding into full CRUD and authentication flows.
+- Project overview: [README.md](/mnt/NewVolume/Programming/Python/FastApi_Project/README.md)
+- Frontend/mobile handoff: [docs/FRONTEND_INTEGRATION.md](/mnt/NewVolume/Programming/Python/FastApi_Project/docs/FRONTEND_INTEGRATION.md)
+- Tests guide: [tests/README.md](/mnt/NewVolume/Programming/Python/FastApi_Project/tests/README.md)

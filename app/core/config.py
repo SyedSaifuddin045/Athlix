@@ -1,8 +1,12 @@
+import json
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    app_name: str = Field("Athelix API", alias="APP_NAME")
+    app_version: str = Field("0.1.0", alias="APP_VERSION")
 
     debug: bool = Field(False, alias="DEBUG")
 
@@ -16,6 +20,26 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field("HS256", alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(30, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(7, alias="REFRESH_TOKEN_EXPIRE_DAYS")
+    cors_allowed_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+            "capacitor://localhost",
+            "ionic://localhost",
+        ],
+        alias="CORS_ALLOWED_ORIGINS",
+    )
+    cors_allow_credentials: bool = Field(True, alias="CORS_ALLOW_CREDENTIALS")
+    cors_allowed_methods: list[str] = Field(
+        default_factory=lambda: ["*"],
+        alias="CORS_ALLOWED_METHODS",
+    )
+    cors_allowed_headers: list[str] = Field(
+        default_factory=lambda: ["*"],
+        alias="CORS_ALLOWED_HEADERS",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -75,6 +99,26 @@ class Settings(BaseSettings):
     def validate_refresh_token_expire_days(cls, value: int) -> int:
         if value <= 0:
             raise ValueError("REFRESH_TOKEN_EXPIRE_DAYS must be greater than 0")
+        return value
+
+    @field_validator(
+        "cors_allowed_origins",
+        "cors_allowed_methods",
+        "cors_allowed_headers",
+        mode="before",
+    )
+    @classmethod
+    def parse_list_setting(cls, value: list[str] | str) -> list[str] | str:
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return []
+            if stripped.startswith("["):
+                parsed = json.loads(stripped)
+                if not isinstance(parsed, list):
+                    raise ValueError("Expected a JSON array")
+                return [str(item).strip() for item in parsed if str(item).strip()]
+            return [item.strip() for item in stripped.split(",") if item.strip()]
         return value
 
 

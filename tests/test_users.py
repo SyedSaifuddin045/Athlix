@@ -1,4 +1,7 @@
 import pytest
+from sqlalchemy.orm import Session
+
+from app.models.exercise import Exercise
 
 pytestmark = pytest.mark.asyncio
 
@@ -19,6 +22,24 @@ async def register_user(
     )
     assert response.status_code == 201
     return response.json()
+
+
+@pytest.fixture
+def seeded_exercise(client, test_db):
+    with Session(test_db) as session:
+        session.add(
+            Exercise(
+                id="bench-press",
+                name="Bench Press",
+                body_part="chest",
+                equipment="barbell",
+                gif_url="https://example.com/bench.gif",
+                target="pectorals",
+            )
+        )
+        session.commit()
+
+    return {"bench_press": "bench-press"}
 
 
 class TestCurrentUserEndpoints:
@@ -68,6 +89,98 @@ class TestCurrentUserEndpoints:
 
         assert response.status_code == 409
         assert response.json()["detail"] == "Email is already registered"
+
+    async def test_get_current_user_overview(self, client, seeded_exercise):
+        auth_data = await register_user(client)
+        headers = {"Authorization": f"Bearer {auth_data['access_token']}"}
+
+        profile_response = await client.put(
+            "/users/me/profile",
+            json={
+                "display_name": "Athlete One",
+                "height_cm": 180,
+                "weight_kg": 82.5,
+                "preferred_unit": "metric",
+            },
+            headers=headers,
+        )
+        body_weight_response = await client.post(
+            "/users/me/body-weight-logs",
+            json={
+                "weight_kg": 82.5,
+                "logged_at": "2026-03-18",
+            },
+            headers=headers,
+        )
+        mesocycle_response = await client.post(
+            "/mesocycles",
+            json={
+                "name": "Current Block",
+                "goal": "strength",
+                "started_on": "2026-03-01",
+                "weeks": 6,
+            },
+            headers=headers,
+        )
+        template_response = await client.post(
+            "/workout-templates",
+            json={
+                "name": "Upper A",
+                "description": "Bench-focused session",
+            },
+            headers=headers,
+        )
+        assert profile_response.status_code == 200
+        assert body_weight_response.status_code == 201
+        assert mesocycle_response.status_code == 201
+        assert template_response.status_code == 201
+
+        session_response = await client.post(
+            "/workout-sessions",
+            json={
+                "mesocycle_id": mesocycle_response.json()["id"],
+                "template_id": template_response.json()["id"],
+                "name": "Bench Day",
+                "started_at": "2026-03-18T06:00:00Z",
+                "finished_at": "2026-03-18T07:00:00Z",
+                "is_completed": True,
+            },
+            headers=headers,
+        )
+        assert session_response.status_code == 201
+
+        set_response = await client.post(
+            f"/workout-sessions/{session_response.json()['id']}/sets",
+            json={
+                "exercise_id": seeded_exercise["bench_press"],
+                "set_number": 1,
+                "set_type": "working",
+                "reps": 5,
+                "weight_kg": 100,
+                "rpe": 8.5,
+            },
+            headers=headers,
+        )
+        assert set_response.status_code == 201
+
+        response = await client.get(
+            "/users/me/overview",
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["user"]["username"] == "athlete_one"
+        assert data["has_profile"] is True
+        assert data["profile"]["display_name"] == "Athlete One"
+        assert data["latest_body_weight_log"]["weight_kg"] == 82.5
+        assert data["active_mesocycle"]["name"] == "Current Block"
+        assert data["latest_completed_session"]["name"] == "Bench Day"
+        assert len(data["recent_personal_records"]) >= 1
+        assert data["workout_streaks"]["longest_daily_streak"] == 1
+        assert data["stats"]["total_workout_templates"] == 1
+        assert data["stats"]["completed_sessions"] == 1
+        assert data["stats"]["personal_record_count"] >= 1
 
 
 class TestUserProfileEndpoints:

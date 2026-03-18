@@ -14,8 +14,10 @@ logger = logging.getLogger(__name__)
 @router.get("/")
 async def root():
     return {
-        "message": "Welcome to Athelix API",
-        "version": "0.1.0"
+        "message": f"Welcome to {settings.app_name}",
+        "version": settings.app_version,
+        "docs_url": "/docs",
+        "redoc_url": "/redoc",
     }
 
 
@@ -23,6 +25,7 @@ async def root():
 async def health_check():
     return {
         "status": "healthy",
+        "version": settings.app_version,
     }
 
 

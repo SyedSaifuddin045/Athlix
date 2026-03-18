@@ -3,6 +3,14 @@ from datetime import date, datetime
 from .base_schema import BaseSchema
 from .workout_session import WorkoutSessionResponse
 
+SUPPORTED_MESOCYCLE_GOALS = (
+    "strength",
+    "hypertrophy",
+    "endurance",
+    "weight_loss",
+    "maintenance",
+)
+
 
 class MesocycleCreate(BaseSchema):
     name: str
