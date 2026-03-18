@@ -23,7 +23,8 @@ The current codebase provides the application foundation: configuration manageme
 - Alembic migration support
 - Seed script for exercise data
 - Health and database connectivity endpoints
-- JWT-based authentication endpoints for registration and login
+- JWT-based authentication with access and refresh tokens
+- Authenticated user profile and bodyweight log endpoints
 - Test suite for API, configuration, and database behavior
 
 ## Data Model Overview
@@ -46,9 +47,19 @@ The currently exposed routes are focused on service validation:
 - `GET /health` - application health status
 - `GET /db-test` - simple database connectivity check
 - `GET /db-query` - database version/query check
-- `POST /auth/register` - create a user account and issue an access token
-- `POST /auth/login` - authenticate a user and issue an access token
+- `POST /auth/register` - create a user account and issue access/refresh tokens
+- `POST /auth/login` - authenticate a user and issue access/refresh tokens
+- `POST /auth/refresh` - exchange a valid refresh token for a new token pair
 - `GET /auth/me` - return the currently authenticated user
+- `GET /users/me` - return the current authenticated user
+- `PATCH /users/me` - update the current user's username or email
+- `GET /users/me/profile` - fetch the current user's profile
+- `PUT /users/me/profile` - create or update the current user's profile
+- `GET /users/me/body-weight-logs` - list the current user's bodyweight logs
+- `POST /users/me/body-weight-logs` - create a new bodyweight log
+- `GET /users/me/body-weight-logs/{log_id}` - fetch a specific bodyweight log
+- `PATCH /users/me/body-weight-logs/{log_id}` - update a specific bodyweight log
+- `DELETE /users/me/body-weight-logs/{log_id}` - delete a specific bodyweight log
 
 Interactive API docs are available at:
 
@@ -113,8 +124,10 @@ DATABASE_PASSWORD=postgres
 DEBUG=True
 
 JWT_SECRET_KEY=replace-with-a-long-random-secret-at-least-32-characters
+JWT_REFRESH_SECRET_KEY=replace-with-a-different-long-random-secret
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
 ```
 
 ### 3. Start the application stack

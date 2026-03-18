@@ -20,8 +20,10 @@ class TestRegistrationEndpoint:
 
         data = response.json()
         assert "access_token" in data
+        assert "refresh_token" in data
         assert data["token_type"] == "bearer"
         assert data["expires_in"] == settings.access_token_expire_minutes * 60
+        assert data["refresh_expires_in"] == settings.refresh_token_expire_days * 24 * 60 * 60
         assert data["user"]["username"] == "athlete_one"
         assert data["user"]["email"] == "athlete@example.com"
 
@@ -104,3 +106,46 @@ class TestAuthenticatedEndpoint:
         data = response.json()
         assert data["username"] == "athlete_one"
         assert data["email"] == "athlete@example.com"
+
+
+class TestRefreshEndpoint:
+    async def test_refresh_returns_new_token_pair(self, client):
+        register_response = await client.post(
+            "/auth/register",
+            json={
+                "username": "athlete_one",
+                "email": "athlete@example.com",
+                "password": "StrongPass123",
+            },
+        )
+        refresh_token = register_response.json()["refresh_token"]
+
+        response = await client.post(
+            "/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert data["user"]["email"] == "athlete@example.com"
+
+    async def test_refresh_rejects_access_token(self, client):
+        register_response = await client.post(
+            "/auth/register",
+            json={
+                "username": "athlete_one",
+                "email": "athlete@example.com",
+                "password": "StrongPass123",
+            },
+        )
+        access_token = register_response.json()["access_token"]
+
+        response = await client.post(
+            "/auth/refresh",
+            json={"refresh_token": access_token},
+        )
+
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Invalid refresh token"

@@ -1,3 +1,4 @@
+import binascii
 import base64
 import hashlib
 import hmac
@@ -60,14 +61,19 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
+def _create_token(
+    subject: str,
+    token_type: str,
+    secret_key: str,
+    expires_delta: timedelta,
+) -> str:
     now = datetime.now(UTC)
-    expire_at = now + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
+    expire_at = now + expires_delta
 
     header = {"alg": settings.jwt_algorithm, "typ": "JWT"}
     payload = {
         "sub": subject,
-        "type": "access",
+        "type": token_type,
         "iat": int(now.timestamp()),
         "exp": int(expire_at.timestamp()),
     }
@@ -80,7 +86,7 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
     )
     signing_input = f"{encoded_header}.{encoded_payload}".encode("ascii")
     signature = hmac.new(
-        settings.jwt_secret_key.encode("utf-8"),
+        secret_key.encode("utf-8"),
         signing_input,
         hashlib.sha256,
     ).digest()
@@ -88,7 +94,25 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
     return f"{encoded_header}.{encoded_payload}.{_b64url_encode(signature)}"
 
 
-def decode_token(token: str) -> dict:
+def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
+    return _create_token(
+        subject=subject,
+        token_type="access",
+        secret_key=settings.jwt_secret_key,
+        expires_delta=expires_delta or timedelta(minutes=settings.access_token_expire_minutes),
+    )
+
+
+def create_refresh_token(subject: str, expires_delta: timedelta | None = None) -> str:
+    return _create_token(
+        subject=subject,
+        token_type="refresh",
+        secret_key=settings.jwt_refresh_secret_key,
+        expires_delta=expires_delta or timedelta(days=settings.refresh_token_expire_days),
+    )
+
+
+def _decode_token(token: str, secret_key: str, expected_type: str) -> dict:
     try:
         encoded_header, encoded_payload, encoded_signature = token.split(".")
     except ValueError as exc:
@@ -96,20 +120,27 @@ def decode_token(token: str) -> dict:
 
     signing_input = f"{encoded_header}.{encoded_payload}".encode("ascii")
     expected_signature = hmac.new(
-        settings.jwt_secret_key.encode("utf-8"),
+        secret_key.encode("utf-8"),
         signing_input,
         hashlib.sha256,
     ).digest()
 
-    signature = _b64url_decode(encoded_signature)
+    try:
+        signature = _b64url_decode(encoded_signature)
+        header = json.loads(_b64url_decode(encoded_header))
+        payload = json.loads(_b64url_decode(encoded_payload))
+    except (binascii.Error, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError("Invalid token payload") from exc
+
     if not hmac.compare_digest(signature, expected_signature):
         raise ValueError("Invalid token signature")
 
-    header = json.loads(_b64url_decode(encoded_header))
     if header.get("alg") != settings.jwt_algorithm or header.get("typ") != "JWT":
         raise ValueError("Invalid token header")
 
-    payload = json.loads(_b64url_decode(encoded_payload))
+    if payload.get("type") != expected_type:
+        raise ValueError("Invalid token type")
+
     exp = payload.get("exp")
     if not isinstance(exp, int):
         raise ValueError("Token is missing a valid exp claim")
@@ -118,3 +149,19 @@ def decode_token(token: str) -> dict:
         raise ValueError("Token has expired")
 
     return payload
+
+
+def decode_access_token(token: str) -> dict:
+    return _decode_token(
+        token=token,
+        secret_key=settings.jwt_secret_key,
+        expected_type="access",
+    )
+
+
+def decode_refresh_token(token: str) -> dict:
+    return _decode_token(
+        token=token,
+        secret_key=settings.jwt_refresh_secret_key,
+        expected_type="refresh",
+    )

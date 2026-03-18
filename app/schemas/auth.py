@@ -2,28 +2,7 @@ from pydantic import Field, StringConstraints
 from typing import Annotated
 
 from .base_schema import BaseSchema
-from .user_schema import UserResponse
-
-EmailField = Annotated[
-    str,
-    StringConstraints(
-        strip_whitespace=True,
-        to_lower=True,
-        min_length=6,
-        max_length=254,
-        pattern=r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$",
-    ),
-]
-
-UsernameField = Annotated[
-    str,
-    StringConstraints(
-        strip_whitespace=True,
-        min_length=3,
-        max_length=50,
-        pattern=r"^[A-Za-z0-9_.-]+$",
-    ),
-]
+from .user_schema import EmailField, UserResponse, UsernameField
 
 PasswordField = Annotated[
     str,
@@ -45,8 +24,14 @@ class LoginRequest(BaseSchema):
     password: PasswordField
 
 
+class RefreshTokenRequest(BaseSchema):
+    refresh_token: str
+
+
 class AuthResponse(BaseSchema):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     expires_in: int = Field(..., description="Access token lifetime in seconds")
+    refresh_expires_in: int = Field(..., description="Refresh token lifetime in seconds")
     user: UserResponse

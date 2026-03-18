@@ -14,15 +14,25 @@ EmailField = Annotated[
     ),
 ]
 
+UsernameField = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=3,
+        max_length=50,
+        pattern=r"^[A-Za-z0-9_.-]+$",
+    ),
+]
+
 
 class UserCreate(BaseSchema):
-    username: str
+    username: UsernameField
     email: EmailField
     password: str
 
 
 class UserUpdate(BaseSchema):
-    username: str | None = None
+    username: UsernameField | None = None
     email: EmailField | None = None
 
 
