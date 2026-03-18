@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from .base_schema import BaseSchema
 
 
@@ -6,6 +7,12 @@ class WorkoutTemplateCreate(BaseSchema):
     name: str
     description: str | None = None
     is_public: bool = False
+
+
+class WorkoutTemplateUpdate(BaseSchema):
+    name: str | None = None
+    description: str | None = None
+    is_public: bool | None = None
 
 
 class WorkoutTemplateResponse(BaseSchema):
@@ -17,9 +24,20 @@ class WorkoutTemplateResponse(BaseSchema):
     created_at: datetime
     updated_at: datetime
 
+
 class WorkoutTemplateExerciseCreate(BaseSchema):
     exercise_id: str
     order_index: int
+    target_sets: int | None = None
+    target_reps: int | None = None
+    target_rpe: float | None = None
+    rest_seconds: int | None = None
+    notes: str | None = None
+
+
+class WorkoutTemplateExerciseUpdate(BaseSchema):
+    exercise_id: str | None = None
+    order_index: int | None = None
     target_sets: int | None = None
     target_reps: int | None = None
     target_rpe: float | None = None
@@ -37,3 +55,7 @@ class WorkoutTemplateExerciseResponse(BaseSchema):
     target_rpe: float | None
     rest_seconds: int | None
     notes: str | None
+
+
+class WorkoutTemplateDetailResponse(WorkoutTemplateResponse):
+    exercises: list[WorkoutTemplateExerciseResponse]

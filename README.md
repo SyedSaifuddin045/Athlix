@@ -64,6 +64,26 @@ The currently exposed routes are focused on service validation:
 - `GET /exercises` - list exercises with optional search and filtering
 - `GET /exercises/filters` - list the available body part, equipment, and target filters
 - `GET /exercises/{exercise_id}` - fetch a specific exercise including instructions and secondary muscles
+- `GET /workout-templates` - list the current user's workout templates
+- `POST /workout-templates` - create a workout template
+- `GET /workout-templates/{template_id}` - fetch a workout template with its planned exercises
+- `PATCH /workout-templates/{template_id}` - update a workout template
+- `DELETE /workout-templates/{template_id}` - delete a workout template
+- `GET /workout-templates/{template_id}/exercises` - list exercises planned in a workout template
+- `POST /workout-templates/{template_id}/exercises` - add an exercise to a workout template
+- `GET /workout-templates/{template_id}/exercises/{template_exercise_id}` - fetch a planned template exercise
+- `PATCH /workout-templates/{template_id}/exercises/{template_exercise_id}` - update a planned template exercise
+- `DELETE /workout-templates/{template_id}/exercises/{template_exercise_id}` - remove a planned template exercise
+- `GET /workout-sessions` - list the current user's workout sessions
+- `POST /workout-sessions` - create a workout session
+- `GET /workout-sessions/{session_id}` - fetch a workout session with its logged sets
+- `PATCH /workout-sessions/{session_id}` - update a workout session
+- `DELETE /workout-sessions/{session_id}` - delete a workout session
+- `GET /workout-sessions/{session_id}/sets` - list logged exercise sets for a workout session
+- `POST /workout-sessions/{session_id}/sets` - log an exercise set in a workout session
+- `GET /workout-sessions/{session_id}/sets/{set_id}` - fetch a logged exercise set
+- `PATCH /workout-sessions/{session_id}/sets/{set_id}` - update a logged exercise set
+- `DELETE /workout-sessions/{session_id}/sets/{set_id}` - delete a logged exercise set
 
 Interactive API docs are available at:
 

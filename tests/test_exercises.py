@@ -6,6 +6,24 @@ from app.models.exercise import Exercise, ExerciseInstruction, ExerciseSecondary
 pytestmark = pytest.mark.asyncio
 
 
+async def register_user(
+    client,
+    username: str = "athlete_one",
+    email: str = "athlete@example.com",
+    password: str = "StrongPass123",
+):
+    response = await client.post(
+        "/auth/register",
+        json={
+            "username": username,
+            "email": email,
+            "password": password,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
 @pytest.fixture
 def seeded_exercises(client, test_db):
     push_up_id = "push-up"
@@ -64,7 +82,12 @@ def seeded_exercises(client, test_db):
 
 class TestExerciseEndpoints:
     async def test_list_exercises_returns_paginated_catalog(self, client, seeded_exercises):
-        response = await client.get("/exercises", params={"limit": 2})
+        auth_data = await register_user(client)
+        response = await client.get(
+            "/exercises",
+            params={"limit": 2},
+            headers={"Authorization": f"Bearer {auth_data['access_token']}"},
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -74,6 +97,7 @@ class TestExerciseEndpoints:
         assert [item["name"] for item in data["items"]] == ["Dumbbell Curl", "Pull Up"]
 
     async def test_list_exercises_supports_search_and_filters(self, client, seeded_exercises):
+        auth_data = await register_user(client)
         response = await client.get(
             "/exercises",
             params={
@@ -82,6 +106,7 @@ class TestExerciseEndpoints:
                 "equipment": "body weight",
                 "target": "LATS",
             },
+            headers={"Authorization": f"Bearer {auth_data['access_token']}"},
         )
 
         assert response.status_code == 200
@@ -91,7 +116,11 @@ class TestExerciseEndpoints:
         assert data["items"][0]["id"] == seeded_exercises["pull_up"]
 
     async def test_get_exercise_returns_nested_details(self, client, seeded_exercises):
-        response = await client.get(f"/exercises/{seeded_exercises['push_up']}")
+        auth_data = await register_user(client)
+        response = await client.get(
+            f"/exercises/{seeded_exercises['push_up']}",
+            headers={"Authorization": f"Bearer {auth_data['access_token']}"},
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -103,7 +132,11 @@ class TestExerciseEndpoints:
         ]
 
     async def test_get_exercise_filters_returns_distinct_values(self, client, seeded_exercises):
-        response = await client.get("/exercises/filters")
+        auth_data = await register_user(client)
+        response = await client.get(
+            "/exercises/filters",
+            headers={"Authorization": f"Bearer {auth_data['access_token']}"},
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -112,7 +145,11 @@ class TestExerciseEndpoints:
         assert data["targets"] == ["biceps", "lats", "pectorals"]
 
     async def test_get_exercise_returns_404_for_unknown_id(self, client, seeded_exercises):
-        response = await client.get("/exercises/unknown")
+        auth_data = await register_user(client)
+        response = await client.get(
+            "/exercises/unknown",
+            headers={"Authorization": f"Bearer {auth_data['access_token']}"},
+        )
 
         assert response.status_code == 404
         assert response.json()["detail"] == "Exercise not found"

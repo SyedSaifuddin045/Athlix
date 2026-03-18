@@ -24,7 +24,11 @@ class WorkoutTemplate(Base):
     created_at: Mapped[datetime]
     updated_at: Mapped[datetime]
 
-    exercises = relationship("WorkoutTemplateExercise", back_populates="template")
+    exercises = relationship(
+        "WorkoutTemplateExercise",
+        back_populates="template",
+        order_by="WorkoutTemplateExercise.order_index, WorkoutTemplateExercise.id",
+    )
 
 
 class WorkoutTemplateExercise(Base):
@@ -85,7 +89,11 @@ class WorkoutSession(Base):
     is_completed: Mapped[bool]
 
     mesocycle = relationship("Mesocycle", back_populates="sessions")
-    sets = relationship("ExerciseSet", back_populates="session")
+    sets = relationship(
+        "ExerciseSet",
+        back_populates="session",
+        order_by="ExerciseSet.set_number, ExerciseSet.id",
+    )
 
 class ExerciseSet(Base):
     __tablename__ = "exercise_sets"
