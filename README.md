@@ -284,6 +284,6 @@ docs/
 
 ## Documentation
 
-- Project overview: [README.md](/mnt/NewVolume/Programming/Python/FastApi_Project/README.md)
-- Frontend/mobile handoff: [docs/FRONTEND_INTEGRATION.md](/mnt/NewVolume/Programming/Python/FastApi_Project/docs/FRONTEND_INTEGRATION.md)
-- Tests guide: [tests/README.md](/mnt/NewVolume/Programming/Python/FastApi_Project/tests/README.md)
+- Project overview: [README.md](README.md)
+- Frontend/mobile handoff: [docs/FRONTEND_INTEGRATION.md](docs/FRONTEND_INTEGRATION.md)
+- Tests guide: [tests/README.md](tests/README.md)
