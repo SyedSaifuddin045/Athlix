@@ -33,8 +33,7 @@ class TestHealthEndpoint:
         data = response.json()
 
         assert data["status"] == "healthy"
-        assert "database_url" in data
-        assert isinstance(data["database_url"], str)
+        assert "database_url" not in data
 
 
 class TestDatabaseTestEndpoint:

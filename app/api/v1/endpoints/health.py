@@ -23,7 +23,6 @@ async def root():
 async def health_check():
     return {
         "status": "healthy",
-        "database_url": settings.database_url
     }
 
 
