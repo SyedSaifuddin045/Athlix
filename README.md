@@ -23,6 +23,7 @@ The current codebase provides the application foundation: configuration manageme
 - Alembic migration support
 - Seed script for exercise data
 - Health and database connectivity endpoints
+- JWT-based authentication endpoints for registration and login
 - Test suite for API, configuration, and database behavior
 
 ## Data Model Overview
@@ -45,6 +46,9 @@ The currently exposed routes are focused on service validation:
 - `GET /health` - application health status
 - `GET /db-test` - simple database connectivity check
 - `GET /db-query` - database version/query check
+- `POST /auth/register` - create a user account and issue an access token
+- `POST /auth/login` - authenticate a user and issue an access token
+- `GET /auth/me` - return the currently authenticated user
 
 Interactive API docs are available at:
 
@@ -82,7 +86,13 @@ uv sync
 
 ### 2. Configure environment variables
 
-Create or update `.env` in the project root with values similar to:
+Copy `.env.example` to `.env` and update the values for your environment:
+
+```bash
+cp .env.example .env
+```
+
+Minimum configuration:
 
 ```env
 POSTGRES_USER=postgres
@@ -101,6 +111,10 @@ DATABASE_USER=postgres
 DATABASE_PASSWORD=postgres
 
 DEBUG=True
+
+JWT_SECRET_KEY=replace-with-a-long-random-secret-at-least-32-characters
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
 ### 3. Start the application stack

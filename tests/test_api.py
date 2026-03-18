@@ -2,12 +2,14 @@
 
 import pytest
 
+pytestmark = pytest.mark.asyncio
+
 
 class TestRootEndpoint:
     """Tests for the root endpoint."""
 
-    def test_root_response(self, client):
-        response = client.get("/")
+    async def test_root_response(self, client):
+        response = await client.get("/")
 
         assert response.status_code == 200
 
@@ -23,8 +25,8 @@ class TestRootEndpoint:
 class TestHealthEndpoint:
     """Tests for the health endpoint."""
 
-    def test_health_response(self, client):
-        response = client.get("/health")
+    async def test_health_response(self, client):
+        response = await client.get("/health")
 
         assert response.status_code == 200
 
@@ -38,8 +40,8 @@ class TestHealthEndpoint:
 class TestDatabaseTestEndpoint:
     """Tests for /db-test endpoint."""
 
-    def test_db_test_response_structure(self, client):
-        response = client.get("/db-test")
+    async def test_db_test_response_structure(self, client):
+        response = await client.get("/db-test")
 
         assert response.status_code == 200
 
@@ -55,8 +57,8 @@ class TestDatabaseTestEndpoint:
 class TestDatabaseQueryEndpoint:
     """Tests for /db-query endpoint."""
 
-    def test_db_query_response_structure(self, client):
-        response = client.get("/db-query")
+    async def test_db_query_response_structure(self, client):
+        response = await client.get("/db-query")
 
         assert response.status_code == 200
 
@@ -74,14 +76,14 @@ class TestAPIEndpoints:
 
     endpoints = ["/", "/health", "/db-test", "/db-query"]
 
-    def test_all_endpoints_return_success(self, client):
+    async def test_all_endpoints_return_success(self, client):
         for endpoint in self.endpoints:
-            response = client.get(endpoint)
+            response = await client.get(endpoint)
             assert response.status_code == 200, f"{endpoint} returned {response.status_code}"
 
-    def test_all_endpoints_return_json(self, client):
+    async def test_all_endpoints_return_json(self, client):
         for endpoint in self.endpoints:
-            response = client.get(endpoint)
+            response = await client.get(endpoint)
 
             assert response.headers["content-type"].startswith("application/json")
 
@@ -92,12 +94,12 @@ class TestAPIEndpoints:
 class TestErrorHandling:
     """Tests for API error behavior."""
 
-    def test_invalid_endpoint_returns_404(self, client):
-        response = client.get("/invalid-endpoint")
+    async def test_invalid_endpoint_returns_404(self, client):
+        response = await client.get("/invalid-endpoint")
 
         assert response.status_code == 404
 
-    def test_method_not_allowed(self, client):
-        response = client.post("/")
+    async def test_method_not_allowed(self, client):
+        response = await client.post("/")
 
         assert response.status_code == 405
