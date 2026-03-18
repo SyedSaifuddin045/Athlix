@@ -84,6 +84,7 @@ class WorkoutSession(Base):
 
     is_completed: Mapped[bool]
 
+    mesocycle = relationship("Mesocycle", back_populates="sessions")
     sets = relationship("ExerciseSet", back_populates="session")
 
 class ExerciseSet(Base):
