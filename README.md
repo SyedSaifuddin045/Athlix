@@ -26,6 +26,8 @@ The current codebase provides the application foundation: configuration manageme
 - JWT-based authentication with access and refresh tokens
 - Authenticated user profile and bodyweight log endpoints
 - Public exercise catalog endpoints with filtering and detailed exercise metadata
+- Workout tracking endpoints for templates, sessions, sets, and auto-managed personal records
+- Analytics services for e1RM, PR detection, volume load, progressive overload, streaks, and progress history
 - Test suite for API, configuration, and database behavior
 
 ## Data Model Overview
@@ -84,6 +86,9 @@ The currently exposed routes are focused on service validation:
 - `GET /workout-sessions/{session_id}/sets/{set_id}` - fetch a logged exercise set
 - `PATCH /workout-sessions/{session_id}/sets/{set_id}` - update a logged exercise set
 - `DELETE /workout-sessions/{session_id}/sets/{set_id}` - delete a logged exercise set
+- `GET /personal-records` - list the current user's personal records with optional exercise and type filters
+- `GET /personal-records/{record_id}` - fetch a specific personal record
+- `GET /progress/{exercise_id}` - return exercise progress history including e1RM formulas, volume, overload, and workout streaks
 
 Interactive API docs are available at:
 

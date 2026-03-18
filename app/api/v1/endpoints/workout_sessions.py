@@ -5,6 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, get_db
+from app.core.personal_records import (
+    run_pr_detector_for_session,
+    sync_personal_records_for_exercises,
+)
 from app.models.exercise import Exercise
 from app.models.mesocycle import Mesocycle
 from app.models.user import User
@@ -67,6 +71,16 @@ def _ensure_exercise_exists(db: Session, exercise_id: str) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Exercise not found",
         )
+
+
+def _get_session_exercise_ids(db: Session, session_id: int) -> set[str]:
+    return set(
+        db.execute(
+            select(ExerciseSet.exercise_id)
+            .where(ExerciseSet.session_id == session_id)
+            .distinct()
+        ).scalars().all()
+    )
 
 
 def _validate_template_reference(
@@ -191,6 +205,7 @@ async def update_workout_session(
             detail="Workout session not found",
         )
 
+    was_completed = session.is_completed
     updates = payload.model_dump(exclude_unset=True)
     if "template_id" in updates:
         _validate_template_reference(db, current_user.id, updates["template_id"])
@@ -204,6 +219,22 @@ async def update_workout_session(
 
     for field, value in updates.items():
         setattr(session, field, value)
+
+    db.flush()
+    affected_exercise_ids = _get_session_exercise_ids(db, session.id)
+    if affected_exercise_ids:
+        if session.is_completed:
+            run_pr_detector_for_session(
+                db,
+                user_id=current_user.id,
+                session_id=session.id,
+            )
+        elif was_completed:
+            sync_personal_records_for_exercises(
+                db,
+                user_id=current_user.id,
+                exercise_ids=affected_exercise_ids,
+            )
 
     db.commit()
     db.refresh(session)
@@ -224,7 +255,16 @@ async def delete_workout_session(
             detail="Workout session not found",
         )
 
+    affected_exercise_ids = _get_session_exercise_ids(db, session.id)
+    was_completed = session.is_completed
     db.delete(session)
+    db.flush()
+    if affected_exercise_ids and was_completed:
+        sync_personal_records_for_exercises(
+            db,
+            user_id=current_user.id,
+            exercise_ids=affected_exercise_ids,
+        )
     db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -280,6 +320,13 @@ async def create_exercise_set(
         **payload_data,
     )
     db.add(exercise_set)
+    db.flush()
+    if session.is_completed:
+        sync_personal_records_for_exercises(
+            db,
+            user_id=current_user.id,
+            exercise_ids={exercise_set.exercise_id},
+        )
     db.commit()
     db.refresh(exercise_set)
 
@@ -332,6 +379,7 @@ async def update_exercise_set(
             detail="Exercise set not found",
         )
 
+    previous_exercise_id = exercise_set.exercise_id
     updates = payload.model_dump(exclude_unset=True)
     if "exercise_id" in updates and updates["exercise_id"] is not None:
         _ensure_exercise_exists(db, updates["exercise_id"])
@@ -342,6 +390,13 @@ async def update_exercise_set(
     for field, value in updates.items():
         setattr(exercise_set, field, value)
 
+    db.flush()
+    if session.is_completed:
+        sync_personal_records_for_exercises(
+            db,
+            user_id=current_user.id,
+            exercise_ids={previous_exercise_id, exercise_set.exercise_id},
+        )
     db.commit()
     db.refresh(exercise_set)
 
@@ -369,7 +424,15 @@ async def delete_exercise_set(
             detail="Exercise set not found",
         )
 
+    affected_exercise_id = exercise_set.exercise_id
     db.delete(exercise_set)
+    db.flush()
+    if session.is_completed:
+        sync_personal_records_for_exercises(
+            db,
+            user_id=current_user.id,
+            exercise_ids={affected_exercise_id},
+        )
     db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
