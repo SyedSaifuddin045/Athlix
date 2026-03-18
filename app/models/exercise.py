@@ -15,8 +15,16 @@ class Exercise(Base):
     gif_url: Mapped[str | None] = mapped_column(Text)
     target: Mapped[str | None] = mapped_column(Text)
 
-    instructions = relationship("ExerciseInstruction", back_populates="exercise")
-    secondary_muscles = relationship("ExerciseSecondaryMuscle", back_populates="exercise")
+    instructions = relationship(
+        "ExerciseInstruction",
+        back_populates="exercise",
+        order_by="ExerciseInstruction.step_number",
+    )
+    secondary_muscles = relationship(
+        "ExerciseSecondaryMuscle",
+        back_populates="exercise",
+        order_by="ExerciseSecondaryMuscle.muscle",
+    )
 
 
 class ExerciseInstruction(Base):

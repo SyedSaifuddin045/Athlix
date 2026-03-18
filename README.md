@@ -25,6 +25,7 @@ The current codebase provides the application foundation: configuration manageme
 - Health and database connectivity endpoints
 - JWT-based authentication with access and refresh tokens
 - Authenticated user profile and bodyweight log endpoints
+- Public exercise catalog endpoints with filtering and detailed exercise metadata
 - Test suite for API, configuration, and database behavior
 
 ## Data Model Overview
@@ -60,6 +61,9 @@ The currently exposed routes are focused on service validation:
 - `GET /users/me/body-weight-logs/{log_id}` - fetch a specific bodyweight log
 - `PATCH /users/me/body-weight-logs/{log_id}` - update a specific bodyweight log
 - `DELETE /users/me/body-weight-logs/{log_id}` - delete a specific bodyweight log
+- `GET /exercises` - list exercises with optional search and filtering
+- `GET /exercises/filters` - list the available body part, equipment, and target filters
+- `GET /exercises/{exercise_id}` - fetch a specific exercise including instructions and secondary muscles
 
 Interactive API docs are available at:
 
