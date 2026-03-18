@@ -25,9 +25,9 @@ The current codebase provides the application foundation: configuration manageme
 - Health and database connectivity endpoints
 - JWT-based authentication with access and refresh tokens
 - Authenticated user profile and bodyweight log endpoints
-- Public exercise catalog endpoints with filtering and detailed exercise metadata
+- Authenticated exercise catalog endpoints with filtering and detailed exercise metadata
 - Workout tracking endpoints for templates, sessions, sets, and auto-managed personal records
-- Analytics services for e1RM, PR detection, volume load, progressive overload, streaks, and progress history
+- Analytics services for e1RM, PR detection, volume load, progressive overload, streaks, deload suggestions, mesocycle comparisons, muscle balance, and progress history
 - Test suite for API, configuration, and database behavior
 
 ## Data Model Overview
@@ -89,6 +89,13 @@ The currently exposed routes are focused on service validation:
 - `GET /personal-records` - list the current user's personal records with optional exercise and type filters
 - `GET /personal-records/{record_id}` - fetch a specific personal record
 - `GET /progress/{exercise_id}` - return exercise progress history including e1RM formulas, volume, overload, and workout streaks
+- `GET /analytics/muscle-balance` - return a muscle group balance report over a recent window or a specific mesocycle
+- `GET /mesocycles` - list the current user's optional mesocycles
+- `POST /mesocycles` - create a mesocycle
+- `GET /mesocycles/{mesocycle_id}` - fetch a mesocycle with linked workout sessions
+- `GET /mesocycles/{mesocycle_id}/analytics` - compare a mesocycle against the previous training block and return deload and muscle-balance insights
+- `PATCH /mesocycles/{mesocycle_id}` - update a mesocycle
+- `DELETE /mesocycles/{mesocycle_id}` - delete a mesocycle
 
 Interactive API docs are available at:
 

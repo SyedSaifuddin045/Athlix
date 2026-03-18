@@ -2,9 +2,11 @@ from fastapi import APIRouter, Depends
 from app.api.deps import get_current_user
 
 from .endpoints import (
+    analytics,
     auth,
     exercises,
     health,
+    mesocycles,
     personal_records,
     progress,
     users,
@@ -45,5 +47,15 @@ api_router.include_router(
 
 api_router.include_router(
     progress.router,
+    dependencies=[Depends(get_current_user)],
+)
+
+api_router.include_router(
+    analytics.router,
+    dependencies=[Depends(get_current_user)],
+)
+
+api_router.include_router(
+    mesocycles.router,
     dependencies=[Depends(get_current_user)],
 )

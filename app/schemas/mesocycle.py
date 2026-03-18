@@ -1,5 +1,7 @@
 from datetime import date, datetime
+
 from .base_schema import BaseSchema
+from .workout_session import WorkoutSessionResponse
 
 
 class MesocycleCreate(BaseSchema):
@@ -29,3 +31,7 @@ class MesocycleResponse(BaseSchema):
     weeks: int | None
     notes: str | None
     created_at: datetime
+
+
+class MesocycleDetailResponse(MesocycleResponse):
+    sessions: list[WorkoutSessionResponse]
