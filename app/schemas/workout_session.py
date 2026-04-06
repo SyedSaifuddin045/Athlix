@@ -43,6 +43,11 @@ class WorkoutSessionResponse(BaseSchema):
     location: str | None
     notes: str | None
     is_completed: bool
+    duration_minutes: int | None = None
+    exercises_count: int | None = None
+    total_sets: int | None = None
+    total_volume: float | None = None
+    prs_count: int | None = None
 
 
 class WorkoutSessionDetailResponse(WorkoutSessionResponse):

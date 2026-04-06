@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, get_db
@@ -11,6 +11,7 @@ from app.core.personal_records import (
 )
 from app.models.exercise import Exercise
 from app.models.mesocycle import Mesocycle
+from app.models.records import PersonalRecord
 from app.models.user import User
 from app.models.workout import ExerciseSet, WorkoutSession, WorkoutTemplate
 from app.schemas.exercise_set import (
@@ -30,6 +31,47 @@ router = APIRouter(prefix="/workout-sessions", tags=["Workout Sessions"])
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _compute_session_stats(
+    db: Session, session: WorkoutSession, include_prs: bool = True
+) -> dict:
+    stats = {
+        "duration_minutes": None,
+        "exercises_count": 0,
+        "total_sets": 0,
+        "total_volume": 0.0,
+        "prs_count": 0,
+    }
+
+    if session.finished_at and session.started_at:
+        delta = session.finished_at - session.started_at
+        stats["duration_minutes"] = int(delta.total_seconds() / 60)
+
+    sets = (
+        db.execute(select(ExerciseSet).where(ExerciseSet.session_id == session.id))
+        .scalars()
+        .all()
+    )
+
+    if sets:
+        exercise_ids = set(s.exercise_id for s in sets)
+        stats["exercises_count"] = len(exercise_ids)
+        stats["total_sets"] = len(sets)
+        stats["total_volume"] = sum((s.weight_kg or 0) * (s.reps or 0) for s in sets)
+
+    if include_prs and session.is_completed:
+        prs = (
+            db.execute(
+                select(func.count(PersonalRecord.id)).where(
+                    PersonalRecord.session_id == session.id
+                )
+            ).scalar()
+            or 0
+        )
+        stats["prs_count"] = prs
+
+    return stats
 
 
 def _get_workout_session(
@@ -79,7 +121,9 @@ def _get_session_exercise_ids(db: Session, session_id: int) -> set[str]:
             select(ExerciseSet.exercise_id)
             .where(ExerciseSet.session_id == session_id)
             .distinct()
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
 
@@ -130,13 +174,24 @@ async def list_workout_sessions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[WorkoutSessionResponse]:
-    sessions = db.execute(
-        select(WorkoutSession)
-        .where(WorkoutSession.user_id == current_user.id)
-        .order_by(WorkoutSession.started_at.desc(), WorkoutSession.id.desc())
-    ).scalars().all()
+    sessions = (
+        db.execute(
+            select(WorkoutSession)
+            .where(WorkoutSession.user_id == current_user.id)
+            .order_by(WorkoutSession.started_at.desc(), WorkoutSession.id.desc())
+        )
+        .scalars()
+        .all()
+    )
 
-    return [WorkoutSessionResponse.model_validate(session) for session in sessions]
+    results = []
+    for session in sessions:
+        session_dict = session.__dict__.copy()
+        stats = _compute_session_stats(db, session)
+        session_dict.update(stats)
+        results.append(WorkoutSessionResponse.model_validate(session_dict))
+
+    return results
 
 
 @router.post(
@@ -188,7 +243,10 @@ async def get_workout_session(
             detail="Workout session not found",
         )
 
-    return WorkoutSessionDetailResponse.model_validate(session)
+    session_dict = session.__dict__.copy()
+    stats = _compute_session_stats(db, session)
+    session_dict.update(stats)
+    return WorkoutSessionDetailResponse.model_validate(session_dict)
 
 
 @router.patch("/{session_id}", response_model=WorkoutSessionResponse)
@@ -211,7 +269,11 @@ async def update_workout_session(
         _validate_template_reference(db, current_user.id, updates["template_id"])
     if "mesocycle_id" in updates:
         _validate_mesocycle_reference(db, current_user.id, updates["mesocycle_id"])
-    if "finished_at" in updates and "is_completed" not in updates and updates["finished_at"] is not None:
+    if (
+        "finished_at" in updates
+        and "is_completed" not in updates
+        and updates["finished_at"] is not None
+    ):
         updates["is_completed"] = True
 
     if not updates:
@@ -239,7 +301,10 @@ async def update_workout_session(
     db.commit()
     db.refresh(session)
 
-    return WorkoutSessionResponse.model_validate(session)
+    session_dict = session.__dict__.copy()
+    stats = _compute_session_stats(db, session)
+    session_dict.update(stats)
+    return WorkoutSessionResponse.model_validate(session_dict)
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -283,11 +348,15 @@ async def list_exercise_sets(
             detail="Workout session not found",
         )
 
-    exercise_sets = db.execute(
-        select(ExerciseSet)
-        .where(ExerciseSet.session_id == session_id)
-        .order_by(ExerciseSet.set_number.asc(), ExerciseSet.id.asc())
-    ).scalars().all()
+    exercise_sets = (
+        db.execute(
+            select(ExerciseSet)
+            .where(ExerciseSet.session_id == session_id)
+            .order_by(ExerciseSet.set_number.asc(), ExerciseSet.id.asc())
+        )
+        .scalars()
+        .all()
+    )
 
     return [ExerciseSetResponse.model_validate(item) for item in exercise_sets]
 
