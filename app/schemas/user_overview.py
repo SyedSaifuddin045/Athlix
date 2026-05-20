@@ -8,11 +8,17 @@ from .user_schema import UserResponse
 from .workout_session import WorkoutSessionResponse
 
 
+class WeeklyActivityDayResponse(BaseSchema):
+    day: str
+    value: int
+
+
 class UserOverviewStatsResponse(BaseSchema):
     total_workout_templates: int
     total_sessions: int
     completed_sessions: int
     personal_record_count: int
+    tracked_exercises_count: int
 
 
 class UserOverviewResponse(BaseSchema):
@@ -25,3 +31,4 @@ class UserOverviewResponse(BaseSchema):
     recent_personal_records: list[PersonalRecordResponse]
     workout_streaks: WorkoutStreaksResponse
     stats: UserOverviewStatsResponse
+    weekly_activity: list[WeeklyActivityDayResponse]

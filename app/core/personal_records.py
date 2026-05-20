@@ -52,8 +52,22 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _ensure_tz_aware(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-aware (UTC)."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _achieved_at(exercise_set: ExerciseSet, session: WorkoutSession) -> datetime:
-    return session.finished_at or exercise_set.logged_at or session.started_at or _utcnow()
+    raw = session.finished_at or exercise_set.logged_at or session.started_at or _utcnow()
+    return _ensure_tz_aware(raw)
+
+
+def _safe_date(dt: datetime | None) -> date:
+    if dt is not None:
+        return dt.date()
+    return _utcnow().date()
 
 
 def _store_best_candidate(
@@ -173,9 +187,7 @@ def sync_personal_records_for_exercises(
                 volume_key = (exercise_id, session.id)
                 session_volume = volume_by_session[volume_key]
                 session_volume["value"] = float(session_volume["value"]) + calculate_set_volume_load(weight, reps)
-                session_volume["achieved_on"] = (
-                    session.finished_at.date() if session.finished_at else session.started_at.date()
-                )
+                session_volume["achieved_on"] = _safe_date(session.finished_at or session.started_at)
                 session_volume["notes"] = session.notes
 
         if reps is not None and reps > 0:

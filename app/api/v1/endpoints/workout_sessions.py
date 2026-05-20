@@ -45,7 +45,13 @@ def _compute_session_stats(
     }
 
     if session.finished_at and session.started_at:
-        delta = session.finished_at - session.started_at
+        finished = session.finished_at
+        started = session.started_at
+        if finished.tzinfo is None:
+            finished = finished.replace(tzinfo=timezone.utc)
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        delta = finished - started
         stats["duration_minutes"] = int(delta.total_seconds() / 60)
 
     sets = (
@@ -279,32 +285,50 @@ async def update_workout_session(
     if not updates:
         return WorkoutSessionResponse.model_validate(session)
 
-    for field, value in updates.items():
-        setattr(session, field, value)
+    try:
+        for field, value in updates.items():
+            setattr(session, field, value)
 
-    db.flush()
-    affected_exercise_ids = _get_session_exercise_ids(db, session.id)
-    if affected_exercise_ids:
-        if session.is_completed:
-            run_pr_detector_for_session(
-                db,
-                user_id=current_user.id,
-                session_id=session.id,
-            )
-        elif was_completed:
-            sync_personal_records_for_exercises(
-                db,
-                user_id=current_user.id,
-                exercise_ids=affected_exercise_ids,
-            )
+        db.flush()
+        affected_exercise_ids = _get_session_exercise_ids(db, session.id)
+        if affected_exercise_ids:
+            try:
+                if session.is_completed:
+                    run_pr_detector_for_session(
+                        db,
+                        user_id=current_user.id,
+                        session_id=session.id,
+                    )
+                elif was_completed:
+                    sync_personal_records_for_exercises(
+                        db,
+                        user_id=current_user.id,
+                        exercise_ids=affected_exercise_ids,
+                    )
+            except Exception as pr_error:
+                # PR detection should not block session updates
+                import logging
+                logging.getLogger(__name__).warning(
+                    "PR detection failed for session %s: %s", session.id, pr_error
+                )
 
-    db.commit()
-    db.refresh(session)
+        db.commit()
+        db.refresh(session)
 
-    session_dict = session.__dict__.copy()
-    stats = _compute_session_stats(db, session)
-    session_dict.update(stats)
-    return WorkoutSessionResponse.model_validate(session_dict)
+        session_dict = session.__dict__.copy()
+        stats = _compute_session_stats(db, session)
+        session_dict.update(stats)
+        return WorkoutSessionResponse.model_validate(session_dict)
+    except Exception as e:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).error(
+            "Failed to update workout session %s: %s", session_id, e, exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update session: {str(e)}",
+        )
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -322,14 +346,21 @@ async def delete_workout_session(
 
     affected_exercise_ids = _get_session_exercise_ids(db, session.id)
     was_completed = session.is_completed
-    db.delete(session)
-    db.flush()
+
     if affected_exercise_ids and was_completed:
-        sync_personal_records_for_exercises(
-            db,
-            user_id=current_user.id,
-            exercise_ids=affected_exercise_ids,
-        )
+        try:
+            sync_personal_records_for_exercises(
+                db,
+                user_id=current_user.id,
+                exercise_ids=affected_exercise_ids,
+            )
+        except Exception as pr_error:
+            import logging
+            logging.getLogger(__name__).warning(
+                "PR sync failed for session deletion: %s", pr_error
+            )
+
+    db.delete(session)
     db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -391,11 +422,17 @@ async def create_exercise_set(
     db.add(exercise_set)
     db.flush()
     if session.is_completed:
-        sync_personal_records_for_exercises(
-            db,
-            user_id=current_user.id,
-            exercise_ids={exercise_set.exercise_id},
-        )
+        try:
+            sync_personal_records_for_exercises(
+                db,
+                user_id=current_user.id,
+                exercise_ids={exercise_set.exercise_id},
+            )
+        except Exception as pr_error:
+            import logging
+            logging.getLogger(__name__).warning(
+                "PR sync failed for set creation: %s", pr_error
+            )
     db.commit()
     db.refresh(exercise_set)
 
@@ -461,11 +498,17 @@ async def update_exercise_set(
 
     db.flush()
     if session.is_completed:
-        sync_personal_records_for_exercises(
-            db,
-            user_id=current_user.id,
-            exercise_ids={previous_exercise_id, exercise_set.exercise_id},
-        )
+        try:
+            sync_personal_records_for_exercises(
+                db,
+                user_id=current_user.id,
+                exercise_ids={previous_exercise_id, exercise_set.exercise_id},
+            )
+        except Exception as pr_error:
+            import logging
+            logging.getLogger(__name__).warning(
+                "PR sync failed for set update: %s", pr_error
+            )
     db.commit()
     db.refresh(exercise_set)
 
@@ -497,11 +540,17 @@ async def delete_exercise_set(
     db.delete(exercise_set)
     db.flush()
     if session.is_completed:
-        sync_personal_records_for_exercises(
-            db,
-            user_id=current_user.id,
-            exercise_ids={affected_exercise_id},
-        )
+        try:
+            sync_personal_records_for_exercises(
+                db,
+                user_id=current_user.id,
+                exercise_ids={affected_exercise_id},
+            )
+        except Exception as pr_error:
+            import logging
+            logging.getLogger(__name__).warning(
+                "PR sync failed for set deletion: %s", pr_error
+            )
     db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

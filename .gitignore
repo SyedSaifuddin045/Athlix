@@ -11,3 +11,4 @@ wheels/
 .env
 sql/postgres.session.sql
 logs/
+.DS_Stores

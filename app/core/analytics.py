@@ -91,6 +91,12 @@ class WorkoutStreaks:
 
 
 @dataclass
+class WeeklyActivityDay:
+    day: str
+    value: int
+
+
+@dataclass
 class SessionEffortSummary:
     session_id: int
     performed_at: datetime
@@ -160,13 +166,20 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _ensure_tz_aware(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-aware (UTC)."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _performed_at_for_session(session: WorkoutSession, fallback: datetime | None = None) -> datetime:
     if session.finished_at is not None:
-        return session.finished_at
+        return _ensure_tz_aware(session.finished_at)
     if session.started_at is not None:
-        return session.started_at
+        return _ensure_tz_aware(session.started_at)
     if fallback is not None:
-        return fallback
+        return _ensure_tz_aware(fallback)
     return _utcnow()
 
 
@@ -255,7 +268,9 @@ def build_session_exercise_summaries(
     ranking_keys: dict[int, tuple[float, float, int, datetime, int]] = {}
 
     for exercise_set, session in rows:
-        performed_at = session.finished_at or session.started_at or exercise_set.logged_at or _utcnow()
+        performed_at = _ensure_tz_aware(
+            session.finished_at or session.started_at or exercise_set.logged_at or _utcnow()
+        )
         summary = summaries.get(session.id)
         if summary is None:
             summary = SessionExerciseSummary(
@@ -282,7 +297,7 @@ def build_session_exercise_summaries(
             default_e1rm if default_e1rm is not None else -1.0,
             float(exercise_set.weight_kg) if exercise_set.weight_kg is not None else -1.0,
             exercise_set.reps if exercise_set.reps is not None else -1,
-            exercise_set.logged_at or performed_at,
+            _ensure_tz_aware(exercise_set.logged_at or performed_at),
             exercise_set.id,
         )
         if candidate_key > ranking_keys[session.id]:
@@ -558,7 +573,7 @@ def build_exercise_block_summaries(
                 default_e1rm if default_e1rm is not None else -1.0,
                 float(exercise_set.weight_kg) if exercise_set.weight_kg is not None else -1.0,
                 exercise_set.reps if exercise_set.reps is not None else -1,
-                exercise_set.logged_at or performed_at,
+                _ensure_tz_aware(exercise_set.logged_at or performed_at),
                 exercise_set.id,
             )
             if candidate_key > ranking_keys[exercise_set.exercise_id]:
@@ -667,3 +682,26 @@ def calculate_workout_streaks(
         current_weekly_streak=current_weekly_streak,
         longest_weekly_streak=longest_weekly_streak,
     )
+
+
+DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"]
+
+
+def calculate_weekly_activity(
+    session_datetimes: list[datetime] | tuple[datetime, ...],
+    *,
+    reference_date: date | None = None,
+) -> list[WeeklyActivityDay]:
+    if reference_date is None:
+        reference_date = datetime.now(timezone.utc).date()
+
+    week_start = reference_date - timedelta(days=reference_date.weekday())
+    active_dates = {dt.date() for dt in session_datetimes}
+
+    return [
+        WeeklyActivityDay(
+            day=DAY_LABELS[i],
+            value=1 if (week_start + timedelta(days=i)) in active_dates else 0,
+        )
+        for i in range(7)
+    ]
