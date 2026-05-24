@@ -122,6 +122,17 @@ async def get_workout_template(
             detail="Workout template not found",
         )
 
+    exercise_ids = [ex.exercise_id for ex in template.exercises]
+    if exercise_ids:
+        exercise_map = {
+            e.id: e.name
+            for e in db.execute(
+                select(Exercise).where(Exercise.id.in_(exercise_ids))
+            ).scalars().all()
+        }
+        for ex in template.exercises:
+            ex.exercise_name = exercise_map.get(ex.exercise_id, ex.exercise_id)
+
     return WorkoutTemplateDetailResponse.model_validate(template)
 
 

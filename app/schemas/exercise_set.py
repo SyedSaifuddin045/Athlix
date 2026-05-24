@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from pydantic import Field
+
 from .base_schema import BaseSchema
 
 
@@ -11,7 +13,7 @@ class ExerciseSetCreate(BaseSchema):
     weight_kg: float | None = None
     duration_sec: int | None = None
     distance_m: float | None = None
-    rpe: float | None = None
+    rpe: float | None = Field(None, ge=1.0, le=10.0)
     is_pr: bool = False
     notes: str | None = None
     logged_at: datetime | None = None
@@ -25,7 +27,7 @@ class ExerciseSetUpdate(BaseSchema):
     weight_kg: float | None = None
     duration_sec: int | None = None
     distance_m: float | None = None
-    rpe: float | None = None
+    rpe: float | None = Field(None, ge=1.0, le=10.0)
     is_pr: bool | None = None
     notes: str | None = None
     logged_at: datetime | None = None
