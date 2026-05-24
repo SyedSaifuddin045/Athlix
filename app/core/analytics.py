@@ -13,36 +13,50 @@ SUPPORTED_E1RM_FORMULAS = (
 DEFAULT_E1RM_FORMULA = "epley"
 DELOAD_RPE_THRESHOLD = 8.5
 DELOAD_MIN_CONSECUTIVE_WEEKS = 2
-DEFAULT_MINIMUM_WEEKLY_SETS = 6.0
-EVIDENCE_BASED_MINIMUM_WEEKLY_SETS = {
-    "abductors": 4.0,
-    "abs": 4.0,
-    "adductors": 4.0,
-    "biceps": 6.0,
-    "calves": 6.0,
-    "cardiovascular system": 4.0,
-    "chest": 6.0,
-    "delts": 6.0,
-    "forearms": 4.0,
-    "glutes": 6.0,
-    "hamstrings": 6.0,
-    "lats": 6.0,
-    "lower arms": 4.0,
-    "lower back": 4.0,
-    "middle back": 6.0,
-    "neck": 4.0,
-    "pectorals": 6.0,
-    "quads": 6.0,
-    "quads and glutes": 6.0,
-    "rear delts": 6.0,
-    "shoulders": 6.0,
-    "spine": 4.0,
-    "traps": 6.0,
-    "triceps": 6.0,
-    "upper arms": 6.0,
-    "upper back": 6.0,
-    "upper legs": 6.0,
-    "waist": 4.0,
+SECONDARY_MUSCLE_WEIGHT = 0.5
+
+CANONICAL_MUSCLE_GROUPS = [
+    "Chest", "Back", "Shoulders", "Arms", "Core",
+    "Quadriceps", "Hamstrings", "Glutes", "Calves",
+]
+
+MUSCLE_GROUP_ALIASES: dict[str, str] = {
+    "pectorals": "Chest",
+    "chest": "Chest",
+    "lats": "Back",
+    "upper back": "Back",
+    "middle back": "Back",
+    "lower back": "Back",
+    "back": "Back",
+    "levator scapulae": "Back",
+    "traps": "Back",
+    "delts": "Shoulders",
+    "shoulders": "Shoulders",
+    "rear delts": "Shoulders",
+    "rear deltoids": "Shoulders",
+    "biceps": "Arms",
+    "triceps": "Arms",
+    "forearms": "Arms",
+    "upper arms": "Arms",
+    "lower arms": "Arms",
+    "abs": "Core",
+    "spine": "Core",
+    "waist": "Core",
+    "obliques": "Core",
+    "hip flexors": "Core",
+    "serratus anterior": "Core",
+    "quads": "Quadriceps",
+    "quadriceps": "Quadriceps",
+    "quads and glutes": "Quadriceps",
+    "upper legs": "Quadriceps",
+    "abductors": "Quadriceps",
+    "adductors": "Quadriceps",
+    "hamstrings": "Hamstrings",
+    "glutes": "Glutes",
+    "calves": "Calves",
+    "lower legs": "Calves",
+    "neck": "Core",
+    "cardiovascular system": "Core",
 }
 
 
@@ -153,13 +167,21 @@ class ExerciseBlockSummary:
 
 
 @dataclass
+class MuscleGroupExerciseSummary:
+    exercise_name: str
+    completed_sets: float
+    average_weekly_sets: float
+
+
+@dataclass
 class MuscleGroupBalanceSummary:
     muscle_group: str
-    completed_sets: int
+    weekly_sets: float
     average_weekly_sets: float
-    minimum_weekly_sets: float
-    difference_vs_minimum: float
-    meets_minimum: bool
+    score: int
+    status: str
+    recommendation: str
+    exercises: list[MuscleGroupExerciseSummary] | None = None
 
 
 def _utcnow() -> datetime:
@@ -585,40 +607,90 @@ def build_exercise_block_summaries(
     return summaries
 
 
+def _generate_recommendation(muscle_group: str, status: str, weekly_sets: float) -> str:
+    if weekly_sets == 0:
+        return f"No {muscle_group.lower()} exercises detected recently."
+    if status == "Strong":
+        return f"{muscle_group} is getting plenty of work — keep it up."
+    if status == "Balanced":
+        return f"Your {muscle_group.lower()} volume is looking balanced."
+    if status == "Undertrained":
+        return f"Consider adding one more {muscle_group.lower()} exercise per week."
+    return f"Try adding a {muscle_group.lower()} exercise to your routine."
+
+
+def _calculate_status_and_score(
+    weekly_sets: float,
+    active_average: float,
+) -> tuple[str, int]:
+    if weekly_sets == 0:
+        return "Needs attention", 0
+    if active_average <= 0:
+        return "Strong", 100
+    ratio = weekly_sets / active_average
+    score = min(100, round(ratio * 100))
+    if score >= 100:
+        return "Strong", 100
+    if score >= 80:
+        return "Balanced", score
+    if score >= 50:
+        return "Undertrained", score
+    return "Needs attention", score
+
+
 def calculate_muscle_group_balance(
-    muscle_groups: list[str] | tuple[str, ...],
+    muscle_groups: list[tuple[str, str, float]] | tuple[tuple[str, str, float], ...],
     *,
     weeks_in_scope: int,
-    minimum_weekly_sets: dict[str, float] | None = None,
 ) -> list[MuscleGroupBalanceSummary]:
     normalized_weeks = max(1, weeks_in_scope)
-    thresholds = minimum_weekly_sets or EVIDENCE_BASED_MINIMUM_WEEKLY_SETS
-    counts: dict[str, int] = {}
+    canonical_set = {g.lower() for g in CANONICAL_MUSCLE_GROUPS}
 
-    for muscle_group in muscle_groups:
-        normalized_group = muscle_group.strip().lower()
-        if not normalized_group:
+    counts: dict[str, float] = {}
+    exercise_counts: dict[str, dict[str, float]] = {}
+
+    for muscle_group, exercise_name, weight in muscle_groups:
+        key = muscle_group.strip()
+        if not key or key.lower() not in canonical_set:
             continue
-        counts[normalized_group] = counts.get(normalized_group, 0) + 1
-
-    summaries = [
-        MuscleGroupBalanceSummary(
-            muscle_group=muscle_group,
-            completed_sets=completed_sets,
-            average_weekly_sets=round(completed_sets / normalized_weeks, 2),
-            minimum_weekly_sets=thresholds.get(muscle_group, DEFAULT_MINIMUM_WEEKLY_SETS),
-            difference_vs_minimum=round(
-                completed_sets / normalized_weeks - thresholds.get(muscle_group, DEFAULT_MINIMUM_WEEKLY_SETS),
-                2,
-            ),
-            meets_minimum=(completed_sets / normalized_weeks) >= thresholds.get(
-                muscle_group,
-                DEFAULT_MINIMUM_WEEKLY_SETS,
-            ),
+        counts[key] = counts.get(key, 0) + weight
+        if key not in exercise_counts:
+            exercise_counts[key] = {}
+        exercise_counts[key][exercise_name] = (
+            exercise_counts[key].get(exercise_name, 0) + weight
         )
-        for muscle_group, completed_sets in counts.items()
-    ]
-    return sorted(summaries, key=lambda item: (item.meets_minimum, item.muscle_group))
+
+    active_average = 0.0
+    active_groups = [v for v in counts.values() if v > 0]
+    if active_groups:
+        active_average = sum(active_groups) / len(active_groups)
+
+    summaries = []
+    for group in CANONICAL_MUSCLE_GROUPS:
+        weekly = counts.get(group, 0.0)
+        status, score = _calculate_status_and_score(weekly, active_average)
+        exercises = [
+            MuscleGroupExerciseSummary(
+                exercise_name=ex_name,
+                completed_sets=ex_sets,
+                average_weekly_sets=round(ex_sets / normalized_weeks, 2),
+            )
+            for ex_name, ex_sets in sorted(
+                exercise_counts.get(group, {}).items(),
+                key=lambda x: -x[1],
+            )
+        ]
+        summaries.append(MuscleGroupBalanceSummary(
+            muscle_group=group,
+            weekly_sets=weekly,
+            average_weekly_sets=round(weekly / normalized_weeks, 2),
+            score=score,
+            status=status,
+            recommendation=_generate_recommendation(group, status, weekly),
+            exercises=exercises,
+        ))
+
+    return sorted(summaries, key=lambda item: (-item.score, item.muscle_group))
 
 
 def calculate_workout_streaks(

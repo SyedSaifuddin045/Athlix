@@ -119,11 +119,12 @@ class TestAnalyticsEndpoints:
         assert report_response.status_code == 200
         data = report_response.json()
         assert data["weeks_in_scope"] == 4
-        assert len(data["items"]) == 1
-        assert data["items"][0]["muscle_group"] == "pectorals"
-        assert data["items"][0]["completed_sets"] == 2
-        assert data["items"][0]["average_weekly_sets"] == 0.5
-        assert data["items"][0]["meets_minimum"] is False
+        assert len(data["items"]) == 9
+        chest = next(item for item in data["items"] if item["muscle_group"] == "Chest")
+        assert chest["weekly_sets"] == 2.0
+        assert chest["average_weekly_sets"] == 0.5
+        assert chest["score"] == 100
+        assert chest["status"] == "Strong"
 
     async def test_muscle_balance_report_can_scope_to_mesocycle(
         self,
@@ -208,6 +209,6 @@ class TestAnalyticsEndpoints:
         assert report_response.status_code == 200
         data = report_response.json()
         assert data["weeks_in_scope"] == 4
-        assert len(data["items"]) == 1
-        assert data["items"][0]["muscle_group"] == "quads"
-        assert data["items"][0]["completed_sets"] == 1
+        assert len(data["items"]) == 9
+        quads_item = next(item for item in data["items"] if item["muscle_group"] == "Quadriceps")
+        assert quads_item["weekly_sets"] == 1.0

@@ -6,26 +6,22 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, get_db
 from app.core.analytics import (
+    MUSCLE_GROUP_ALIASES,
+    SECONDARY_MUSCLE_WEIGHT,
     calculate_muscle_group_balance,
     estimate_weeks_in_range,
 )
-from app.models.exercise import Exercise
+from app.models.exercise import Exercise, ExerciseSecondaryMuscle
 from app.models.mesocycle import Mesocycle
 from app.models.user import User
 from app.models.workout import WorkoutSession
 from app.schemas.analytics import (
     MuscleBalanceReportResponse,
     MuscleGroupBalanceItemResponse,
+    MuscleGroupExerciseItemResponse,
 )
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
-
-
-def _resolve_muscle_group(exercise: Exercise | None) -> str | None:
-    if exercise is None:
-        return None
-    raw_group = (exercise.target or exercise.body_part or "").strip().lower()
-    return raw_group or None
 
 
 def _utc_start_of_day(value: date) -> datetime:
@@ -81,6 +77,7 @@ async def get_muscle_balance_report(
         for exercise_set in session.sets
     }
     exercises_by_id: dict[str, Exercise] = {}
+    secondary_by_exercise: dict[str, list[str]] = {}
     if exercise_ids:
         exercises_by_id = {
             exercise.id: exercise
@@ -88,15 +85,31 @@ async def get_muscle_balance_report(
                 select(Exercise).where(Exercise.id.in_(exercise_ids))
             ).scalars().all()
         }
+        secondary_records = db.execute(
+            select(ExerciseSecondaryMuscle).where(
+                ExerciseSecondaryMuscle.exercise_id.in_(exercise_ids)
+            )
+        ).scalars().all()
+        for rec in secondary_records:
+            secondary_by_exercise.setdefault(rec.exercise_id, []).append(rec.muscle)
 
-    muscle_groups = [
-        muscle_group
-        for session in sessions
-        for exercise_set in session.sets
-        if exercise_set.set_type.lower() != "warmup"
-        for muscle_group in [_resolve_muscle_group(exercises_by_id.get(exercise_set.exercise_id))]
-        if muscle_group is not None
-    ]
+    muscle_groups: list[tuple[str, str, float]] = []
+    for session in sessions:
+        for exercise_set in session.sets:
+            if exercise_set.set_type.lower() == "warmup":
+                continue
+            exercise = exercises_by_id.get(exercise_set.exercise_id)
+            if exercise is None:
+                continue
+            raw_target = (exercise.target or exercise.body_part or "").strip().lower()
+            primary = MUSCLE_GROUP_ALIASES.get(raw_target)
+            if primary:
+                muscle_groups.append((primary, exercise.name, 1.0))
+            for secondary_raw in secondary_by_exercise.get(exercise_set.exercise_id, []):
+                canonical_sec = MUSCLE_GROUP_ALIASES.get(secondary_raw.strip().lower())
+                if canonical_sec and canonical_sec != primary:
+                    muscle_groups.append((canonical_sec, exercise.name, SECONDARY_MUSCLE_WEIGHT))
+
     report = calculate_muscle_group_balance(
         muscle_groups,
         weeks_in_scope=weeks_in_scope,
@@ -107,11 +120,19 @@ async def get_muscle_balance_report(
         items=[
             MuscleGroupBalanceItemResponse(
                 muscle_group=item.muscle_group,
-                completed_sets=item.completed_sets,
+                weekly_sets=item.weekly_sets,
                 average_weekly_sets=item.average_weekly_sets,
-                minimum_weekly_sets=item.minimum_weekly_sets,
-                difference_vs_minimum=item.difference_vs_minimum,
-                meets_minimum=item.meets_minimum,
+                score=item.score,
+                status=item.status,
+                recommendation=item.recommendation,
+                exercises=[
+                    MuscleGroupExerciseItemResponse(
+                        exercise_name=ex.exercise_name,
+                        completed_sets=ex.completed_sets,
+                        average_weekly_sets=ex.average_weekly_sets,
+                    )
+                    for ex in (item.exercises or [])
+                ],
             )
             for item in report
         ],

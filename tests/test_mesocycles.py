@@ -327,10 +327,9 @@ class TestMesocycleEndpoints:
         assert bench_comparison["best_e1rm_delta"] == pytest.approx(11.66, abs=0.01)
         assert data["muscle_balance"]["weeks_in_scope"] == 4
         pectorals = next(
-            item for item in data["muscle_balance"]["items"] if item["muscle_group"] == "pectorals"
+            item for item in data["muscle_balance"]["items"] if item["muscle_group"] == "Chest"
         )
-        assert pectorals["completed_sets"] == 2
-        assert pectorals["meets_minimum"] is False
+        assert pectorals["weekly_sets"] == 2.0
 
     async def test_mesocycle_respects_user_ownership(self, client, seeded_exercise):
         first_user = await register_user(client)
