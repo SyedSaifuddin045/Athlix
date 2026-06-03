@@ -55,6 +55,20 @@ def _get_template_exercise(
     ).scalar_one_or_none()
 
 
+def _populate_exercise_names(db: Session, exercises: list[WorkoutTemplateExercise]) -> None:
+    if not exercises:
+        return
+    exercise_ids = [ex.exercise_id for ex in exercises]
+    exercise_map = {
+        e.id: e.name
+        for e in db.execute(
+            select(Exercise).where(Exercise.id.in_(exercise_ids))
+        ).scalars().all()
+    }
+    for ex in exercises:
+        ex.exercise_name = exercise_map.get(ex.exercise_id, ex.exercise_id)
+
+
 def _ensure_exercise_exists(db: Session, exercise_id: str) -> None:
     exercise = db.execute(
         select(Exercise.id).where(Exercise.id == exercise_id)
@@ -122,16 +136,7 @@ async def get_workout_template(
             detail="Workout template not found",
         )
 
-    exercise_ids = [ex.exercise_id for ex in template.exercises]
-    if exercise_ids:
-        exercise_map = {
-            e.id: e.name
-            for e in db.execute(
-                select(Exercise).where(Exercise.id.in_(exercise_ids))
-            ).scalars().all()
-        }
-        for ex in template.exercises:
-            ex.exercise_name = exercise_map.get(ex.exercise_id, ex.exercise_id)
+    _populate_exercise_names(db, template.exercises)
 
     return WorkoutTemplateDetailResponse.model_validate(template)
 
@@ -205,6 +210,8 @@ async def list_template_exercises(
         )
     ).scalars().all()
 
+    _populate_exercise_names(db, template_exercises)
+
     return [
         WorkoutTemplateExerciseResponse.model_validate(item)
         for item in template_exercises
@@ -240,6 +247,8 @@ async def create_template_exercise(
     db.commit()
     db.refresh(template_exercise)
 
+    _populate_exercise_names(db, [template_exercise])
+
     return WorkoutTemplateExerciseResponse.model_validate(template_exercise)
 
 
@@ -266,6 +275,8 @@ async def get_template_exercise(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Workout template exercise not found",
         )
+
+    _populate_exercise_names(db, [template_exercise])
 
     return WorkoutTemplateExerciseResponse.model_validate(template_exercise)
 
@@ -300,6 +311,7 @@ async def update_template_exercise(
         _ensure_exercise_exists(db, updates["exercise_id"])
 
     if not updates:
+        _populate_exercise_names(db, [template_exercise])
         return WorkoutTemplateExerciseResponse.model_validate(template_exercise)
 
     for field, value in updates.items():
@@ -308,6 +320,8 @@ async def update_template_exercise(
 
     db.commit()
     db.refresh(template_exercise)
+
+    _populate_exercise_names(db, [template_exercise])
 
     return WorkoutTemplateExerciseResponse.model_validate(template_exercise)
 
