@@ -7,5 +7,8 @@ sql_file = Path(__file__).resolve().parent.parent / "sql" / "app_db_data.sql"
 with engine.begin() as conn:
     with open(sql_file) as f:
         raw_sql = f.read()
-    sql = raw_sql.rstrip().rstrip(";") + ' ON CONFLICT ("id") DO NOTHING;'
+    sql = raw_sql.replace(
+        'INSERT INTO "exercises"',
+        'INSERT INTO "exercises" ON CONFLICT ("id") DO NOTHING',
+    )
     conn.execute(text(sql))
