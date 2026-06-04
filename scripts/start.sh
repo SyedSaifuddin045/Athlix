@@ -18,6 +18,7 @@ done
 set -a
 source "$ENV_FILE"
 set +a
+: "${APP_PORT:=8000}"
 
 # -------- Handle database reset --------
 if [ "$RESET_DB" = true ]; then
@@ -39,7 +40,7 @@ done
 
 # -------- Confirm API startup --------
 echo "Waiting for API to start..."
-until docker-compose --env-file "$ENV_FILE" exec -T app python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health').read()" >/dev/null 2>&1; do
+until docker-compose --env-file "$ENV_FILE" exec -T app python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:${APP_PORT}/health').read()" >/dev/null 2>&1; do
   sleep 2
 done
 
@@ -49,5 +50,5 @@ if [ "$RESET_DB" = true ]; then
   uv run python -m scripts.seed_exercises_data
 fi
 
-echo "API is running at http://localhost:8000"
-echo "Swagger UI: http://localhost:8000/docs"
+echo "API is running at http://localhost:${APP_PORT}"
+echo "Swagger UI: http://localhost:${APP_PORT}/docs"
