@@ -12,7 +12,7 @@ COPY pyproject.toml uv.lock README.md alembic.ini ./
 COPY app ./app
 COPY alembic ./alembic
 COPY scripts ./scripts
-
+COPY sql ./sql
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8000
