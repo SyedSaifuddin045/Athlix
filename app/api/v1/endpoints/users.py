@@ -5,11 +5,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.core.analytics import calculate_workout_streaks
+from app.core.analytics import calculate_weekly_activity, calculate_workout_streaks
 from app.models.mesocycle import Mesocycle
 from app.models.records import PersonalRecord
 from app.models.user import BodyWeightLog, User, UserProfile
-from app.models.workout import WorkoutSession, WorkoutTemplate
+from app.models.workout import ExerciseSet, WorkoutSession, WorkoutTemplate
 from app.schemas.body_weight import (
     BodyWeightLogCreate,
     BodyWeightLogResponse,
@@ -26,6 +26,7 @@ from app.schemas.user_schema import UserResponse, UserUpdate
 from app.schemas.user_overview import (
     UserOverviewResponse,
     UserOverviewStatsResponse,
+    WeeklyActivityDayResponse,
 )
 from app.schemas.workout_session import WorkoutSessionResponse
 
@@ -162,6 +163,7 @@ async def get_current_user_overview(
         .order_by(WorkoutSession.started_at.asc())
     ).scalars().all()
     streaks = calculate_workout_streaks(list(completed_session_datetimes))
+    weekly_activity = calculate_weekly_activity(list(completed_session_datetimes))
 
     total_workout_templates = db.execute(
         select(func.count())
@@ -185,6 +187,15 @@ async def get_current_user_overview(
         select(func.count())
         .select_from(PersonalRecord)
         .where(PersonalRecord.user_id == current_user.id)
+    ).scalar_one()
+    tracked_exercises_count = db.execute(
+        select(func.count(func.distinct(ExerciseSet.exercise_id)))
+        .select_from(ExerciseSet)
+        .join(WorkoutSession, ExerciseSet.session_id == WorkoutSession.id)
+        .where(
+            WorkoutSession.user_id == current_user.id,
+            WorkoutSession.is_completed.is_(True),
+        )
     ).scalar_one()
 
     return UserOverviewResponse(
@@ -221,7 +232,12 @@ async def get_current_user_overview(
             total_sessions=total_sessions,
             completed_sessions=completed_sessions,
             personal_record_count=personal_record_count,
+            tracked_exercises_count=tracked_exercises_count,
         ),
+        weekly_activity=[
+            WeeklyActivityDayResponse(day=a.day, value=a.value)
+            for a in weekly_activity
+        ],
     )
 
 

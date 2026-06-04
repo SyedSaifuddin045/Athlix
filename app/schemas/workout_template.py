@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from pydantic import Field
+
 from .base_schema import BaseSchema
 
 
@@ -30,7 +32,7 @@ class WorkoutTemplateExerciseCreate(BaseSchema):
     order_index: int
     target_sets: int | None = None
     target_reps: int | None = None
-    target_rpe: float | None = None
+    target_rpe: float | None = Field(None, ge=1.0, le=10.0)
     rest_seconds: int | None = None
     notes: str | None = None
 
@@ -40,7 +42,7 @@ class WorkoutTemplateExerciseUpdate(BaseSchema):
     order_index: int | None = None
     target_sets: int | None = None
     target_reps: int | None = None
-    target_rpe: float | None = None
+    target_rpe: float | None = Field(None, ge=1.0, le=10.0)
     rest_seconds: int | None = None
     notes: str | None = None
 
@@ -49,6 +51,7 @@ class WorkoutTemplateExerciseResponse(BaseSchema):
     id: int
     template_id: int
     exercise_id: str
+    exercise_name: str | None = None
     order_index: int
     target_sets: int | None
     target_reps: int | None

@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
 from app.models.exercise import Exercise
+from app.models.user import User
+from app.models.workout import ExerciseSet, WorkoutSession
 from app.schemas.exercise_schema import (
     ExerciseDetailResponse,
     ExerciseFiltersResponse,
@@ -46,7 +48,9 @@ async def list_exercises(
     target: str | None = Query(default=None, min_length=1, max_length=100),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    tracked: bool = Query(default=False),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ExerciseListResponse:
     base_statement = _apply_filters(
         select(Exercise),
@@ -55,6 +59,21 @@ async def list_exercises(
         equipment=equipment,
         target=target,
     )
+
+    if tracked:
+        tracked_ids = db.execute(
+            select(ExerciseSet.exercise_id)
+            .join(WorkoutSession, ExerciseSet.session_id == WorkoutSession.id)
+            .where(
+                WorkoutSession.user_id == current_user.id,
+                WorkoutSession.is_completed.is_(True),
+            )
+            .distinct()
+        ).scalars().all()
+        if tracked_ids:
+            base_statement = base_statement.where(Exercise.id.in_(tracked_ids))
+        else:
+            base_statement = base_statement.where(False)
 
     total = db.execute(
         select(func.count()).select_from(base_statement.order_by(None).subquery())

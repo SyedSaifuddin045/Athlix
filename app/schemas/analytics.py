@@ -53,13 +53,20 @@ class ExerciseBlockComparisonResponse(BaseSchema):
     best_e1rm_delta: float | None
 
 
+class MuscleGroupExerciseItemResponse(BaseSchema):
+    exercise_name: str
+    completed_sets: float
+    average_weekly_sets: float
+
+
 class MuscleGroupBalanceItemResponse(BaseSchema):
     muscle_group: str
-    completed_sets: int
+    weekly_sets: float
     average_weekly_sets: float
-    minimum_weekly_sets: float
-    difference_vs_minimum: float
-    meets_minimum: bool
+    score: int
+    status: str
+    recommendation: str
+    exercises: list[MuscleGroupExerciseItemResponse] = []
 
 
 class MuscleBalanceReportResponse(BaseSchema):

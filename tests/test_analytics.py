@@ -162,7 +162,7 @@ def test_training_block_comparison_and_muscle_balance_helpers():
         default_formula="epley",
     )
     muscle_balance = calculate_muscle_group_balance(
-        ["pectorals", "pectorals", "quads"],
+        [("Chest", "Bench Press", 1.0), ("Chest", "Bench Press", 1.0), ("Quadriceps", "Squat", 1.0)],
         weeks_in_scope=4,
     )
 
@@ -171,9 +171,13 @@ def test_training_block_comparison_and_muscle_balance_helpers():
     assert delta.total_volume_load_delta == 600
     assert exercise_summaries["bench"].best_e1rm == 128.33
     assert exercise_summaries["bench"].completed_sets == 2
-    assert muscle_balance[0].muscle_group == "pectorals"
+    assert muscle_balance[0].muscle_group == "Chest"
     assert muscle_balance[0].average_weekly_sets == 0.5
-    assert muscle_balance[0].meets_minimum is False
+    assert muscle_balance[0].status == "Strong"
+    assert muscle_balance[0].score == 100
+    assert len(muscle_balance[0].exercises) == 1
+    assert muscle_balance[0].exercises[0].exercise_name == "Bench Press"
+    assert muscle_balance[0].exercises[0].completed_sets == 2.0
 
 
 def test_workout_streaks_calculate_current_and_longest_sequences():

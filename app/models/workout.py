@@ -93,6 +93,8 @@ class WorkoutSession(Base):
         "ExerciseSet",
         back_populates="session",
         order_by="ExerciseSet.set_number, ExerciseSet.id",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
 class ExerciseSet(Base):

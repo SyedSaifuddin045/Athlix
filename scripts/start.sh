@@ -37,9 +37,11 @@ until docker exec "$POSTGRES_CONTAINER_NAME" pg_isready -U "$POSTGRES_USER" >/de
   sleep 2
 done
 
-# -------- Run migrations --------
-echo "Running migrations..."
-uv run alembic upgrade head
+# -------- Confirm API startup --------
+echo "Waiting for API to start..."
+until docker-compose --env-file "$ENV_FILE" exec -T app python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health').read()" >/dev/null 2>&1; do
+  sleep 2
+done
 
 # -------- Seed database --------
 if [ "$RESET_DB" = true ]; then
@@ -47,6 +49,5 @@ if [ "$RESET_DB" = true ]; then
   uv run python -m scripts.seed_exercises_data
 fi
 
-# -------- Start API --------
-echo "Starting API..."
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+echo "API is running at http://localhost:8000"
+echo "Swagger UI: http://localhost:8000/docs"

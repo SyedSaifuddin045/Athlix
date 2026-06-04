@@ -1,0 +1,16 @@
+.git
+.github
+.pytest_cache
+.venv
+.vscode
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.codex
+Athelix_ERD.png
+docs
+fastapi_project.egg-info
+logs
+tests
