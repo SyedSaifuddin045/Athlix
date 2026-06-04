@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     networks:
       - coolify
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
     environment:
       DATABASE_HOST: ${DATABASE_HOST:?error}
       DATABASE_PORT: ${DATABASE_PORT:-5432}
