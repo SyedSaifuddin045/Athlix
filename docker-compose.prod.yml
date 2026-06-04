@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    networks:
+      - coolify
     environment:
       DATABASE_HOST: ${DATABASE_HOST:?error}
       DATABASE_PORT: ${DATABASE_PORT:-5432}
@@ -35,3 +37,6 @@ services:
       - "traefik.http.routers.athlix.tls=true"
       - "traefik.http.routers.athlix.tls.certresolver=letsencrypt"
       - "traefik.http.services.athlix.loadbalancer.server.port=${APP_PORT:-8000}"
+networks:
+  coolify:
+    external: true 
