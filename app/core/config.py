@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = Field("Athelix API", alias="APP_NAME")
     app_version: str = Field("0.1.0", alias="APP_VERSION")
+    app_port: int = Field(8000, alias="APP_PORT")
 
     debug: bool = Field(False, alias="DEBUG")
 
@@ -79,6 +80,13 @@ class Settings(BaseSettings):
                 return False
             if normalized in {"dev", "development"}:
                 return True
+        return value
+
+    @field_validator("app_port")
+    @classmethod
+    def validate_app_port(cls, value: int) -> int:
+        if not 1 <= value <= 65535:
+            raise ValueError("APP_PORT must be between 1 and 65535")
         return value
 
     @field_validator("jwt_algorithm")
