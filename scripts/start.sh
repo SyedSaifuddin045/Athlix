@@ -18,7 +18,7 @@ done
 set -a
 source "$ENV_FILE"
 set +a
-: "${APP_PORT:=8000}"
+: "${APP_PORT:=8050}"
 
 # -------- Handle database reset --------
 if [ "$RESET_DB" = true ]; then

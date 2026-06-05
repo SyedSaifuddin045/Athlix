@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = Field("Athelix API", alias="APP_NAME")
     app_version: str = Field("0.1.0", alias="APP_VERSION")
-    app_port: int = Field(8000, alias="APP_PORT")
+    app_port: int = Field(8050, alias="APP_PORT")
 
     debug: bool = Field(False, alias="DEBUG")
 
