@@ -23,8 +23,8 @@ async def get_app_config(request: Request) -> AppConfigResponse:
         environment="development" if settings.debug else "production",
         auth=AppAuthConfigResponse(
             token_type="bearer",
-            access_token_expires_in=settings.access_token_expire_minutes * 60,
-            refresh_token_expires_in=settings.refresh_token_expire_days * 24 * 60 * 60,
+            access_token_expires_in=3600,
+            refresh_token_expires_in=604800,
         ),
         docs=AppDocsConfigResponse(
             docs_url=request.app.docs_url,

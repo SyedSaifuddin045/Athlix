@@ -1,7 +1,5 @@
 import pytest
 
-from app.core.config import settings
-
 pytestmark = pytest.mark.asyncio
 
 
@@ -22,8 +20,8 @@ class TestRegistrationEndpoint:
         assert "access_token" in data
         assert "refresh_token" in data
         assert data["token_type"] == "bearer"
-        assert data["expires_in"] == settings.access_token_expire_minutes * 60
-        assert data["refresh_expires_in"] == settings.refresh_token_expire_days * 24 * 60 * 60
+        assert data["expires_in"] == 3600
+        assert data["refresh_expires_in"] == 604800
         assert data["user"]["username"] == "athlete_one"
         assert data["user"]["email"] == "athlete@example.com"
 
