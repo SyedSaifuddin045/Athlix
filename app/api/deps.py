@@ -1,11 +1,19 @@
+import logging
+
+from datetime import datetime, timezone
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.clerk import verify_clerk_token
 from app.core.database import get_db
-from app.core.security import decode_access_token
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
+
+UTC = timezone.utc
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -24,26 +32,35 @@ async def get_current_user(
         raise auth_error
 
     try:
-        payload = decode_access_token(credentials.credentials)
-        subject = payload.get("sub")
-        token_type = payload.get("type")
-    except ValueError as exc:
+        payload = verify_clerk_token(credentials.credentials)
+        clerk_id = payload.get("sub")
+    except Exception as exc:
+        logger.warning("Clerk token verification failed: %s", exc)
         raise auth_error from exc
 
-    if token_type != "access" or not subject:
+    if not clerk_id:
         raise auth_error
-
-    try:
-        user_id = int(subject)
-    except (TypeError, ValueError) as exc:
-        raise auth_error from exc
 
     user = db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(User.clerk_id == clerk_id)
     ).scalar_one_or_none()
+
     if user is None:
-        raise auth_error
+        email = payload.get("email") or f"{clerk_id}@clerk.placeholder"
+        username = payload.get("username") or email.split("@")[0]
+        now = datetime.now(UTC)
+        user = User(
+            clerk_id=clerk_id,
+            username=username,
+            email=email,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
     return user
+
 
 __all__ = ["get_db", "get_current_user", "bearer_scheme"]

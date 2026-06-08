@@ -11,9 +11,10 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
+    clerk_id: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)
     username: Mapped[str] = mapped_column(Text, unique=True)
     email: Mapped[str] = mapped_column(Text, unique=True)
-    password_hash: Mapped[str] = mapped_column(Text)
+    password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime]
     updated_at: Mapped[datetime]
