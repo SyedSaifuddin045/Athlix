@@ -47,12 +47,20 @@ async def get_current_user(
 
     if user is None:
         email = payload.get("email") or f"{clerk_id}@clerk.placeholder"
-        username = payload.get("username") or email.split("@")[0]
+        first_name = payload.get("first_name") or ""
+        last_name = payload.get("last_name") or ""
+        username = payload.get("username") or (
+            f"{first_name}_{last_name}".lower().strip("_")
+            if first_name or last_name
+            else email.split("@")[0]
+        )
         now = datetime.now(UTC)
         user = User(
             clerk_id=clerk_id,
             username=username,
             email=email,
+            first_name=first_name or None,
+            last_name=last_name or None,
             created_at=now,
             updated_at=now,
         )
