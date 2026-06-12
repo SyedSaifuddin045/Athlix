@@ -67,6 +67,13 @@ async def get_current_user(
         db.add(user)
         db.commit()
         db.refresh(user)
+    else:
+        jwt_email = payload.get("email")
+        if jwt_email and user.email and jwt_email != user.email:
+            if "clerk.placeholder" in user.email or user.email.endswith("@clerk.dev"):
+                user.email = jwt_email
+                user.updated_at = datetime.now(UTC)
+                db.commit()
 
     return user
 
