@@ -21,6 +21,7 @@ OPENAPI_TAGS = [
     {"name": "Personal Records", "description": "Read-only PR tracking derived from completed sessions."},
     {"name": "Progress", "description": "Exercise-level progress timelines and overload analytics."},
     {"name": "Analytics", "description": "User-level analytics and muscle balance reporting."},
+    {"name": "Feedback", "description": "User feedback, feature requests, bug reports, and app reviews."},
     {"name": "Mesocycles", "description": "Optional training blocks and block-level analytics."},
 ]
 

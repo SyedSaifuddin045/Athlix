@@ -24,6 +24,7 @@ services:
       CORS_ALLOW_CREDENTIALS: "true"
       CORS_ALLOWED_METHODS: '["*"]'
       CORS_ALLOWED_HEADERS: '["*"]'
+      ADMIN_CLERK_IDS: ${ADMIN_CLERK_IDS:-[]}
     command:
       [
         "sh",

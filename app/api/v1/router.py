@@ -5,6 +5,7 @@ from .endpoints import (
     analytics,
     auth,
     exercises,
+    feedback,
     health,
     mesocycles,
     meta,
@@ -59,5 +60,10 @@ api_router.include_router(
 
 api_router.include_router(
     mesocycles.router,
+    dependencies=[Depends(get_current_user)],
+)
+
+api_router.include_router(
+    feedback.router,
     dependencies=[Depends(get_current_user)],
 )

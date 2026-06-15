@@ -41,6 +41,11 @@ class Settings(BaseSettings):
         alias="CORS_ALLOWED_HEADERS",
     )
 
+    admin_clerk_ids: list[str] = Field(
+        default_factory=list,
+        alias="ADMIN_CLERK_IDS",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

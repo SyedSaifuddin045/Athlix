@@ -3,3 +3,4 @@ from .mesocycle import *
 from .exercise import *
 from .workout import *
 from .records import *
+from .feedback import *
