@@ -74,9 +74,9 @@ async def submit_waitlist(
                     detail=errors[0]["message"] if errors else "Invalid data",
                 )
 
-    if settings.google_play_service_account_json and settings.google_play_package_name:
+    if settings.google_play_service_account_json and settings.google_group_email:
         try:
-            await _add_google_play_tester(body.email)
+            await _add_to_group(body.email)
         except Exception:
             pass
 
@@ -92,18 +92,18 @@ async def submit_waitlist(
     return WaitlistResponse(success=True)
 
 
-async def _add_google_play_tester(email: str) -> None:
+async def _add_to_group(email: str) -> None:
     import json
 
     import jwt as pyjwt
 
     credentials = json.loads(settings.google_play_service_account_json)
-    package_name = settings.google_play_package_name
+    group_email = settings.google_group_email
 
     now = int(datetime.now(timezone.utc).timestamp())
     claim = {
         "iss": credentials["client_email"],
-        "scope": "https://www.googleapis.com/auth/androidpublisher",
+        "scope": "https://www.googleapis.com/auth/admin.directory.group.member",
         "aud": credentials["token_uri"],
         "exp": now + 3600,
         "iat": now,
@@ -121,39 +121,15 @@ async def _add_google_play_tester(email: str) -> None:
         token_data = token_res.json()
         access_token = token_data["access_token"]
 
-        base = f"https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{package_name}"
-
-        edit_res = await client.post(
-            f"{base}/edits",
-            headers={"Authorization": f"Bearer {access_token}"},
-            json={},
+        resp = await client.post(
+            f"https://admin.googleapis.com/admin/directory/v1/groups/{group_email}/members",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            json={"email": email, "role": "MEMBER"},
         )
-        edit_res.raise_for_status()
-        edit_id = edit_res.json()["id"]
-
-        tester_res = await client.get(
-            f"{base}/edits/{edit_id}/testers/internal",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-
-        testers: dict = {}
-        if tester_res.is_success:
-            testers = tester_res.json()
-            if email in testers.get("emails", []):
-                return
-
-        existing_emails = testers.get("emails", [])
-        testers["emails"] = existing_emails + [email]
-        testers.setdefault("googleGroups", [])
-        testers.setdefault("googlePlayCommunities", [])
-
-        await client.put(
-            f"{base}/edits/{edit_id}/testers/internal",
-            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
-            json=testers,
-        )
-
-        await client.post(
-            f"{base}/edits/{edit_id}:commit",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
+        if resp.status_code == 409:
+            pass  # already a member
+        else:
+            resp.raise_for_status()

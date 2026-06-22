@@ -50,6 +50,7 @@ class Settings(BaseSettings):
 
     google_play_service_account_json: str | None = Field(None, alias="GOOGLE_PLAY_SERVICE_ACCOUNT_JSON")
     google_play_package_name: str | None = Field(None, alias="GOOGLE_PLAY_PACKAGE_NAME")
+    google_group_email: str | None = Field(None, alias="GOOGLE_GROUP_EMAIL")
 
     model_config = SettingsConfigDict(
         env_file=".env",
