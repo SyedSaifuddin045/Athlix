@@ -1,5 +1,7 @@
+import secrets
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
@@ -37,9 +39,11 @@ async def submit_waitlist(
         )
 
     clerk_user_id: str | None = None
-    import httpx
 
     async with httpx.AsyncClient() as client:
+        username = body.name.lower().replace(" ", "_").replace(".", "_")
+        password = secrets.token_urlsafe(16)
+
         clerk_res = await client.post(
             "https://api.clerk.com/v1/users",
             headers={
@@ -48,7 +52,9 @@ async def submit_waitlist(
             },
             json={
                 "email_address": [body.email],
+                "username": username,
                 "first_name": body.name,
+                "password": password,
                 "public_metadata": {"source": "landing-page-waitlist"},
             },
         )
@@ -68,7 +74,6 @@ async def submit_waitlist(
                     detail=errors[0]["message"] if errors else "Invalid data",
                 )
 
-    # Google Play tester add (best-effort)
     if settings.google_play_service_account_json and settings.google_play_package_name:
         try:
             await _add_google_play_tester(body.email)
@@ -90,15 +95,12 @@ async def submit_waitlist(
 async def _add_google_play_tester(email: str) -> None:
     import json
 
-    import httpx
+    import jwt as pyjwt
 
     credentials = json.loads(settings.google_play_service_account_json)
     package_name = settings.google_play_package_name
 
-    # JWT for service account auth
-    header = {"alg": "RS256", "typ": "JWT"}
     now = int(datetime.now(timezone.utc).timestamp())
-
     claim = {
         "iss": credentials["client_email"],
         "scope": "https://www.googleapis.com/auth/androidpublisher",
@@ -106,10 +108,7 @@ async def _add_google_play_tester(email: str) -> None:
         "exp": now + 3600,
         "iat": now,
     }
-
-    import jwt as pyjwt
-
-    signed_jwt = pyjwt.encode(claim, credentials["private_key"], algorithm="RS256", headers=header)
+    signed_jwt = pyjwt.encode(claim, credentials["private_key"], algorithm="RS256")
 
     async with httpx.AsyncClient() as client:
         token_res = await client.post(
@@ -122,38 +121,41 @@ async def _add_google_play_tester(email: str) -> None:
         token_data = token_res.json()
         access_token = token_data["access_token"]
 
-        base_url = f"https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{package_name}"
+        base = f"https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{package_name}"
 
         edit_res = await client.post(
-            f"{base_url}/edits",
+            f"{base}/edits",
             headers={"Authorization": f"Bearer {access_token}"},
             json={},
         )
         edit_res.raise_for_status()
-        edit = edit_res.json()
+        edit_id = edit_res.json()["id"]
 
         track_res = await client.get(
-            f"{base_url}/edits/{edit['id']}/tracks/production",
+            f"{base}/edits/{edit_id}/tracks/internal",
             headers={"Authorization": f"Bearer {access_token}"},
         )
-        testers = {"emails": []}
-        if track_res.is_success:
-            track_data = track_res.json()
-            testers = track_data.get("testers", {"emails": []})
 
-        if email not in testers.get("emails", []):
-            testers.setdefault("emails", []).append(email)
+        track = {"track": "internal", "releases": [], "testers": [{"emails": [email], "googleGroups": [], "googlePlayCommunities": []}]}
+        if track_res.is_success:
+            existing_track = track_res.json()
+            existing_emails = []
+            for t in existing_track.get("testers") or []:
+                existing_emails.extend(t.get("emails") or [])
+            if email in existing_emails:
+                return
+            track = existing_track
+            if not track.get("testers"):
+                track["testers"] = []
+            track["testers"].append({"emails": [email], "googleGroups": [], "googlePlayCommunities": []})
 
         await client.put(
-            f"{base_url}/edits/{edit['id']}/tracks/production",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-            },
-            json={"track": "production", "testers": testers, "releases": []},
+            f"{base}/edits/{edit_id}/tracks/internal",
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            json=track,
         )
 
         await client.post(
-            f"{base_url}/edits/{edit['id']}:commit",
+            f"{base}/edits/{edit_id}:commit",
             headers={"Authorization": f"Bearer {access_token}"},
         )
