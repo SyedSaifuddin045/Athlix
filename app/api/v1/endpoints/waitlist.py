@@ -131,28 +131,26 @@ async def _add_google_play_tester(email: str) -> None:
         edit_res.raise_for_status()
         edit_id = edit_res.json()["id"]
 
-        track_res = await client.get(
-            f"{base}/edits/{edit_id}/tracks/internal",
+        tester_res = await client.get(
+            f"{base}/edits/{edit_id}/testers/internal",
             headers={"Authorization": f"Bearer {access_token}"},
         )
 
-        track = {"track": "internal", "releases": [], "testers": [{"emails": [email], "googleGroups": [], "googlePlayCommunities": []}]}
-        if track_res.is_success:
-            existing_track = track_res.json()
-            existing_emails = []
-            for t in existing_track.get("testers") or []:
-                existing_emails.extend(t.get("emails") or [])
-            if email in existing_emails:
+        testers: dict = {}
+        if tester_res.is_success:
+            testers = tester_res.json()
+            if email in testers.get("emails", []):
                 return
-            track = existing_track
-            if not track.get("testers"):
-                track["testers"] = []
-            track["testers"].append({"emails": [email], "googleGroups": [], "googlePlayCommunities": []})
+
+        existing_emails = testers.get("emails", [])
+        testers["emails"] = existing_emails + [email]
+        testers.setdefault("googleGroups", [])
+        testers.setdefault("googlePlayCommunities", [])
 
         await client.put(
-            f"{base}/edits/{edit_id}/tracks/internal",
+            f"{base}/edits/{edit_id}/testers/internal",
             headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
-            json=track,
+            json=testers,
         )
 
         await client.post(
