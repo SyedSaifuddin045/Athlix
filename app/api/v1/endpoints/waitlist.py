@@ -17,6 +17,7 @@ router = APIRouter(prefix="/waitlist", tags=["Waitlist"])
 class WaitlistResponse(BaseModel):
     success: bool
     join_url: str = ""
+    play_url: str = ""
 
 
 class WaitlistRequest(BaseModel):
@@ -85,10 +86,11 @@ async def submit_waitlist(
     db.commit()
 
     join_url = ""
+    play_url = settings.play_optin_url or ""
     if settings.google_group_email:
         join_url = f"https://groups.google.com/g/{settings.google_group_email.split('@')[0]}"
 
-    return WaitlistResponse(success=True, join_url=join_url)
+    return WaitlistResponse(success=True, join_url=join_url, play_url=play_url)
 
 
 
