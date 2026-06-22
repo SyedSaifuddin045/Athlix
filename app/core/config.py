@@ -26,6 +26,7 @@ class Settings(BaseSettings):
             "http://localhost:5173",
             "http://127.0.0.1:3000",
             "http://127.0.0.1:5173",
+            "https://athelix.fit",
             "capacitor://localhost",
             "ionic://localhost",
         ],
@@ -45,6 +46,9 @@ class Settings(BaseSettings):
         default_factory=list,
         alias="ADMIN_CLERK_IDS",
     )
+
+    google_play_service_account_json: str | None = Field(None, alias="GOOGLE_PLAY_SERVICE_ACCOUNT_JSON")
+    google_play_package_name: str | None = Field(None, alias="GOOGLE_PLAY_PACKAGE_NAME")
 
     model_config = SettingsConfigDict(
         env_file=".env",

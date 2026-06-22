@@ -12,6 +12,7 @@ from .endpoints import (
     personal_records,
     progress,
     users,
+    waitlist,
     workout_sessions,
     workout_templates,
 )
@@ -67,3 +68,5 @@ api_router.include_router(
     feedback.router,
     dependencies=[Depends(get_current_user)],
 )
+
+api_router.include_router(waitlist.router)
