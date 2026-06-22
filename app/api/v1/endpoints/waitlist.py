@@ -16,6 +16,7 @@ router = APIRouter(prefix="/waitlist", tags=["Waitlist"])
 
 class WaitlistResponse(BaseModel):
     success: bool
+    join_url: str = ""
 
 
 class WaitlistRequest(BaseModel):
@@ -74,12 +75,6 @@ async def submit_waitlist(
                     detail=errors[0]["message"] if errors else "Invalid data",
                 )
 
-    if settings.google_play_service_account_json and settings.google_group_email:
-        try:
-            await _add_to_group(body.email)
-        except Exception:
-            pass
-
     entry = WaitlistEntry(
         name=body.name,
         email=body.email,
@@ -89,47 +84,11 @@ async def submit_waitlist(
     db.add(entry)
     db.commit()
 
-    return WaitlistResponse(success=True)
+    join_url = ""
+    if settings.google_group_email:
+        join_url = f"https://groups.google.com/g/{settings.google_group_email.split('@')[0]}"
+
+    return WaitlistResponse(success=True, join_url=join_url)
 
 
-async def _add_to_group(email: str) -> None:
-    import json
 
-    import jwt as pyjwt
-
-    credentials = json.loads(settings.google_play_service_account_json)
-    group_email = settings.google_group_email
-
-    now = int(datetime.now(timezone.utc).timestamp())
-    claim = {
-        "iss": credentials["client_email"],
-        "scope": "https://www.googleapis.com/auth/admin.directory.group.member",
-        "aud": credentials["token_uri"],
-        "exp": now + 3600,
-        "iat": now,
-    }
-    signed_jwt = pyjwt.encode(claim, credentials["private_key"], algorithm="RS256")
-
-    async with httpx.AsyncClient() as client:
-        token_res = await client.post(
-            credentials["token_uri"],
-            data={
-                "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-                "assertion": signed_jwt,
-            },
-        )
-        token_data = token_res.json()
-        access_token = token_data["access_token"]
-
-        resp = await client.post(
-            f"https://admin.googleapis.com/admin/directory/v1/groups/{group_email}/members",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-            },
-            json={"email": email, "role": "MEMBER"},
-        )
-        if resp.status_code == 409:
-            pass  # already a member
-        else:
-            resp.raise_for_status()
