@@ -47,3 +47,4 @@ class ExerciseSetResponse(BaseSchema):
     is_pr: bool
     notes: str | None
     logged_at: datetime
+    calories_burned: float | None = None

@@ -34,7 +34,7 @@ def _utcnow() -> datetime:
 
 
 def _compute_session_stats(
-    db: Session, session: WorkoutSession, include_prs: bool = True
+    db: Session, session: WorkoutSession, user_id: int | None = None, include_prs: bool = True, include_calories: bool = True
 ) -> dict:
     stats = {
         "duration_minutes": None,
@@ -42,6 +42,7 @@ def _compute_session_stats(
         "total_sets": 0,
         "total_volume": 0.0,
         "prs_count": 0,
+        "calories_burned": None,
     }
 
     if session.finished_at and session.started_at:
@@ -77,7 +78,69 @@ def _compute_session_stats(
         )
         stats["prs_count"] = prs
 
+    if include_calories and sets:
+        calories_burned = _compute_calories(db, sets, user_id)
+        if calories_burned is not None:
+            stats["calories_burned"] = calories_burned
+
     return stats
+
+
+def _compute_calories(
+    db: Session, sets: list[ExerciseSet], user_id: int
+) -> float | None:
+    from app.models.user import UserProfile
+    profile = db.execute(
+        select(UserProfile.weight_kg).where(UserProfile.user_id == user_id)
+    ).scalar_one_or_none()
+    if profile is None:
+        return None
+    weight_kg = float(profile)
+
+    exercise_ids = list(set(s.exercise_id for s in sets))
+    exercise_met_map: dict[str, float | None] = {}
+    for eid in exercise_ids:
+        met = db.execute(
+            select(Exercise.met_value).where(Exercise.id == eid)
+        ).scalar_one_or_none()
+        exercise_met_map[eid] = float(met) if met is not None else None
+
+    total = 0.0
+    has_cardio = False
+    for s in sets:
+        met = exercise_met_map.get(s.exercise_id)
+        if met is None or s.duration_sec is None or s.duration_sec == 0:
+            continue
+        rpe = s.rpe if s.rpe is not None else 5.0
+        hours = s.duration_sec / 3600.0
+        total += met * (rpe / 5.0) * weight_kg * hours
+        has_cardio = True
+
+    return round(total, 1) if has_cardio else None
+
+
+def _compute_set_calories(
+    db: Session, exercise_id: str, set_rpe: float | None, set_duration_sec: int | None, user_id: int
+) -> float | None:
+    if set_duration_sec is None or set_duration_sec == 0:
+        return None
+
+    met = db.execute(
+        select(Exercise.met_value).where(Exercise.id == exercise_id)
+    ).scalar_one_or_none()
+    if met is None:
+        return None
+
+    from app.models.user import UserProfile
+    weight_kg = db.execute(
+        select(UserProfile.weight_kg).where(UserProfile.user_id == user_id)
+    ).scalar_one_or_none()
+    if weight_kg is None:
+        return None
+
+    rpe = set_rpe if set_rpe is not None else 5.0
+    hours = set_duration_sec / 3600.0
+    return round(float(met) * (rpe / 5.0) * float(weight_kg) * hours, 1)
 
 
 def _get_workout_session(
@@ -193,7 +256,7 @@ async def list_workout_sessions(
     results = []
     for session in sessions:
         session_dict = session.__dict__.copy()
-        stats = _compute_session_stats(db, session)
+        stats = _compute_session_stats(db, session, user_id=current_user.id)
         session_dict.update(stats)
         results.append(WorkoutSessionResponse.model_validate(session_dict))
 
@@ -250,8 +313,19 @@ async def get_workout_session(
         )
 
     session_dict = session.__dict__.copy()
-    stats = _compute_session_stats(db, session)
+    stats = _compute_session_stats(db, session, user_id=current_user.id, include_calories=True)
     session_dict.update(stats)
+
+    if session.sets:
+        enriched_sets = []
+        for s in session.sets:
+            s_dict = s.__dict__.copy()
+            cal = _compute_set_calories(db, s.exercise_id, s.rpe, s.duration_sec, current_user.id)
+            s_dict["calories_burned"] = cal
+            from app.schemas.exercise_set import ExerciseSetResponse
+            enriched_sets.append(ExerciseSetResponse.model_validate(s_dict))
+        session_dict["sets"] = enriched_sets
+
     return WorkoutSessionDetailResponse.model_validate(session_dict)
 
 
@@ -316,7 +390,7 @@ async def update_workout_session(
         db.refresh(session)
 
         session_dict = session.__dict__.copy()
-        stats = _compute_session_stats(db, session)
+        stats = _compute_session_stats(db, session, user_id=current_user.id)
         session_dict.update(stats)
         return WorkoutSessionResponse.model_validate(session_dict)
     except Exception as e:

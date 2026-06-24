@@ -48,6 +48,7 @@ class WorkoutSessionResponse(BaseSchema):
     total_sets: int | None = None
     total_volume: float | None = None
     prs_count: int | None = None
+    calories_burned: float | None = None
 
 
 class WorkoutSessionDetailResponse(WorkoutSessionResponse):

@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, get_db
-from app.models.exercise import Exercise
+from app.models.exercise import Exercise, ExerciseCategory
 from app.models.user import User
 from app.models.workout import ExerciseSet, WorkoutSession
 from app.schemas.exercise_schema import (
@@ -23,6 +23,7 @@ def _apply_filters(
     body_part: str | None,
     equipment: str | None,
     target: str | None,
+    category: str | None,
 ):
     if q:
         search_term = f"%{q.strip().lower()}%"
@@ -37,6 +38,9 @@ def _apply_filters(
     if target:
         statement = statement.where(func.lower(Exercise.target) == target.strip().lower())
 
+    if category:
+        statement = statement.where(Exercise.exercise_category == category.strip().lower())
+
     return statement
 
 
@@ -46,6 +50,7 @@ async def list_exercises(
     body_part: str | None = Query(default=None, min_length=1, max_length=100),
     equipment: str | None = Query(default=None, min_length=1, max_length=100),
     target: str | None = Query(default=None, min_length=1, max_length=100),
+    category: str | None = Query(default=None, min_length=1, max_length=20),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     tracked: bool = Query(default=False),
@@ -58,6 +63,7 @@ async def list_exercises(
         body_part=body_part,
         equipment=equipment,
         target=target,
+        category=category,
     )
 
     if tracked:
@@ -117,10 +123,13 @@ async def get_exercise_filters(
         .order_by(Exercise.target.asc())
     ).scalars().all()
 
+    categories = [c.value for c in ExerciseCategory]
+
     return ExerciseFiltersResponse(
         body_parts=body_parts,
         equipment=equipment,
         targets=targets,
+        categories=categories,
     )
 
 

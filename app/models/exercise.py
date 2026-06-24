@@ -1,7 +1,16 @@
-from sqlalchemy import String, Text, Integer, ForeignKey
+from sqlalchemy import String, Text, Integer, ForeignKey, Enum, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+import enum
+
+
+class ExerciseCategory(str, enum.Enum):
+    STRENGTH = "strength"
+    CARDIO = "cardio"
+    FLEXIBILITY = "flexibility"
+    OTHER = "other"
 
 
 class Exercise(Base):
@@ -14,6 +23,11 @@ class Exercise(Base):
     equipment: Mapped[str | None] = mapped_column(Text)
     gif_url: Mapped[str | None] = mapped_column(Text)
     target: Mapped[str | None] = mapped_column(Text)
+
+    exercise_category: Mapped[ExerciseCategory | None] = mapped_column(
+        Enum(ExerciseCategory, schema="app_schema"), nullable=True, default=ExerciseCategory.STRENGTH
+    )
+    met_value: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
 
     instructions = relationship(
         "ExerciseInstruction",
