@@ -1,8 +1,4 @@
-from typing import Literal
 from .base_schema import BaseSchema
-
-
-ExerciseCategoryLiteral = Literal["strength", "cardio", "flexibility", "other"]
 
 
 class ExerciseInstructionResponse(BaseSchema):
@@ -23,8 +19,6 @@ class ExerciseResponse(BaseSchema):
     equipment: str | None
     gif_url: str | None
     target: str | None
-    exercise_category: str | None = None
-    met_value: float | None = None
 
 
 class ExerciseDetailResponse(ExerciseResponse):
@@ -43,4 +37,3 @@ class ExerciseFiltersResponse(BaseSchema):
     body_parts: list[str]
     equipment: list[str]
     targets: list[str]
-    categories: list[str]
