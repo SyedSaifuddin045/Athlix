@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, get_db
-from app.models.exercise import Exercise
+from app.models.exercise import Exercise, ExerciseCategory
 from app.models.user import User
 from app.models.workout import ExerciseSet, WorkoutSession
 from app.schemas.exercise_schema import (
@@ -123,10 +123,13 @@ async def get_exercise_filters(
         .order_by(Exercise.target.asc())
     ).scalars().all()
 
+    categories = [c.value for c in ExerciseCategory]
+
     return ExerciseFiltersResponse(
         body_parts=body_parts,
         equipment=equipment,
         targets=targets,
+        categories=categories,
     )
 
 
