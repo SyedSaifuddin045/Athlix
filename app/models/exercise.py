@@ -25,7 +25,8 @@ class Exercise(Base):
     target: Mapped[str | None] = mapped_column(Text)
 
     exercise_category: Mapped[ExerciseCategory | None] = mapped_column(
-        Enum(ExerciseCategory, schema="app_schema"), nullable=True, default=ExerciseCategory.STRENGTH
+        Enum(ExerciseCategory, schema="app_schema", values_callable=lambda obj: [e.value for e in obj]),
+        nullable=True, default=ExerciseCategory.STRENGTH,
     )
     met_value: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
 
