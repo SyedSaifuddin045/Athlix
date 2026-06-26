@@ -29,6 +29,11 @@ from app.schemas.workout_session import (
 router = APIRouter(prefix="/workout-sessions", tags=["Workout Sessions"])
 
 
+DISTANCE_FACTORS = {"running": 1.036, "walking": 0.5, "hiking": 0.6}
+HEIGHT_BASELINE = 170.0
+HEIGHT_FACTOR_COEFF = 0.002
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -152,7 +157,7 @@ def _compute_calories(
         exercise_name_map[eid] = row.name if row else ""
 
     total = 0.0
-    has_cardio = False
+    has_any_valid_set = False
     for s in sets:
         met = exercise_met_map.get(s.exercise_id)
         name = exercise_name_map.get(s.exercise_id, "")
@@ -164,14 +169,14 @@ def _compute_calories(
         distance_km = (s.distance_m or 0) / 1000.0
 
         if cal_type != "met" and distance_km > 0:
-            factor = {"running": 1.036, "walking": 0.5, "hiking": 0.6}.get(cal_type, 1.036)
+            factor = DISTANCE_FACTORS.get(cal_type, 1.036)
             cal = weight_kg * distance_km * factor
-            has_cardio = True
+            has_any_valid_set = True
         elif met is not None:
             rpe = s.rpe if s.rpe is not None else 5.0
-            height_factor = 1.0 + (height_cm - 170.0) * 0.002 if height_cm else 1.0
+            height_factor = 1.0 + (height_cm - HEIGHT_BASELINE) * HEIGHT_FACTOR_COEFF if height_cm else 1.0
             cal = met * (rpe / 5.0) * weight_kg * hours * height_factor
-            has_cardio = True
+            has_any_valid_set = True
         else:
             continue
 
@@ -179,7 +184,7 @@ def _compute_calories(
             cal = bmr_hr * hours
         total += cal
 
-    return round(total, 1) if has_cardio else None
+    return round(total, 1) if has_any_valid_set else None
 
 
 def _compute_set_calories(
@@ -214,9 +219,9 @@ def _compute_set_calories(
     row = db.execute(
         select(Exercise.met_value, Exercise.name).where(Exercise.id == exercise_id)
     ).first()
-    if row is None or row.met_value is None:
+    if row is None:
         return None
-    met_val = float(row.met_value)
+    met_val = float(row.met_value) if row.met_value is not None else None
     name = row.name or ""
 
     hours = set_duration_sec / 3600.0
@@ -224,12 +229,14 @@ def _compute_set_calories(
     dist_km = (distance_m or 0) / 1000.0
 
     if cal_type != "met" and dist_km > 0:
-        factor = {"running": 1.036, "walking": 0.5, "hiking": 0.6}.get(cal_type, 1.036)
+        factor = DISTANCE_FACTORS.get(cal_type, 1.036)
         cal = weight_kg * dist_km * factor
-    else:
+    elif met_val is not None:
         rpe = set_rpe if set_rpe is not None else 5.0
-        height_factor = 1.0 + (height_cm - 170.0) * 0.002 if height_cm else 1.0
+        height_factor = 1.0 + (height_cm - HEIGHT_BASELINE) * HEIGHT_FACTOR_COEFF if height_cm else 1.0
         cal = met_val * (rpe / 5.0) * weight_kg * hours * height_factor
+    else:
+        return None
 
     if bmr_hr and cal < bmr_hr * hours:
         cal = bmr_hr * hours
