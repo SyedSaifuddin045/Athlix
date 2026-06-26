@@ -44,6 +44,7 @@ class UserProfile(Base):
 
     fitness_level: Mapped[str | None]
     preferred_unit: Mapped[str | None]
+    primary_goal: Mapped[str | None]
 
     created_at: Mapped[datetime]
     updated_at: Mapped[datetime]

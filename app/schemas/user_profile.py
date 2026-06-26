@@ -12,6 +12,7 @@ class UserProfileCreate(BaseSchema):
     weight_kg: float | None = Field(default=None, gt=0)
     fitness_level: str | None = None
     preferred_unit: str | None = None
+    primary_goal: str | None = None
 
 
 class UserProfileUpdate(BaseSchema):
@@ -22,6 +23,7 @@ class UserProfileUpdate(BaseSchema):
     weight_kg: float | None = Field(default=None, gt=0)
     fitness_level: str | None = None
     preferred_unit: str | None = None
+    primary_goal: str | None = None
 
 
 class UserProfileResponse(BaseSchema):
@@ -34,5 +36,6 @@ class UserProfileResponse(BaseSchema):
     weight_kg: float | None
     fitness_level: str | None
     preferred_unit: str | None
+    primary_goal: str | None
     created_at: datetime
     updated_at: datetime
