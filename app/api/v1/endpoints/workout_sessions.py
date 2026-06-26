@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, get_db
@@ -10,6 +10,7 @@ from app.core.personal_records import (
     sync_personal_records_for_exercises,
 )
 from app.models.exercise import Exercise
+from app.exercise_cache import CANONICAL_CARDIO_EXERCISES
 from app.models.mesocycle import Mesocycle
 from app.models.records import PersonalRecord
 from app.models.user import User
@@ -278,11 +279,38 @@ def _ensure_exercise_exists(db: Session, exercise_id: str) -> None:
     exercise = db.execute(
         select(Exercise.id).where(Exercise.id == exercise_id)
     ).scalar_one_or_none()
-    if exercise is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Exercise not found",
+    if exercise is not None:
+        return
+
+    if exercise_id in CANONICAL_CARDIO_EXERCISES:
+        data = CANONICAL_CARDIO_EXERCISES[exercise_id]
+        db.execute(
+            text("""
+                INSERT INTO app_schema.exercises
+                    (id, name, body_part, equipment, target,
+                     exercise_category, met_value)
+                VALUES
+                    (:id, :name, :body_part, :equipment, :target,
+                     :exercise_category, :met_value)
+                ON CONFLICT (id) DO NOTHING
+            """),
+            {
+                "id": exercise_id,
+                "name": data["name"],
+                "body_part": data["body_part"],
+                "equipment": data["equipment"],
+                "target": data["target"],
+                "exercise_category": data["exercise_category"],
+                "met_value": data["met_value"],
+            },
         )
+        db.flush()
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Exercise not found",
+    )
 
 
 def _get_session_exercise_ids(db: Session, session_id: int) -> set[str]:

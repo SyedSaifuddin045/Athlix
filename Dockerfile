@@ -15,4 +15,4 @@ COPY scripts ./scripts
 COPY sql ./sql
 RUN uv sync --frozen --no-dev
 
-CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT:-8050}"]
+CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT:-8050}"]

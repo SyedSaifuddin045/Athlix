@@ -4,11 +4,30 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-# Import config early to configure logging according to settings.debug
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.database import SessionLocal
+from app.exercise_cache import ExerciseCache
+from app.response_cache import ResponseCacheMiddleware
+
+
+def _rate_limit_key(request: Request) -> str:
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return f"user:{auth[7:32]}"
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return f"ip:{forwarded.split(',')[0].strip()}"
+    client = request.client
+    return f"ip:{client.host if client else 'unknown'}"
+
+
+limiter = Limiter(key_func=_rate_limit_key, default_limits=["120/minute"])
 
 OPENAPI_TAGS = [
     {"name": "Health", "description": "Operational health and connectivity endpoints."},
@@ -35,6 +54,9 @@ app = FastAPI(
     openapi_tags=OPENAPI_TAGS,
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allowed_origins,
@@ -43,7 +65,21 @@ app.add_middleware(
     allow_headers=settings.cors_allowed_headers,
 )
 
+app.add_middleware(ResponseCacheMiddleware)
+app.add_middleware(SlowAPIMiddleware)
+
 app.include_router(api_router)
+
+
+@app.on_event("startup")
+async def warm_exercise_cache():
+    try:
+        db = SessionLocal()
+        ExerciseCache.load(db)
+    except Exception:
+        pass
+    finally:
+        db.close()
 
 
 def _format_validation_errors(errors: list[dict]) -> list[dict[str, str]]:

@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from fastapi.responses import Response
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models.exercise import Exercise, ExerciseCategory
+from app.exercise_cache import ExerciseCache
+from app.models.exercise import ExerciseCategory
 from app.models.user import User
 from app.models.workout import ExerciseSet, WorkoutSession
 from app.schemas.exercise_schema import (
@@ -16,32 +18,24 @@ from app.schemas.exercise_schema import (
 router = APIRouter(prefix="/exercises", tags=["Exercises"])
 
 
-def _apply_filters(
-    statement,
-    *,
-    q: str | None,
-    body_part: str | None,
-    equipment: str | None,
-    target: str | None,
-    category: str | None,
-):
-    if q:
-        search_term = f"%{q.strip().lower()}%"
-        statement = statement.where(func.lower(Exercise.name).like(search_term))
+def _matches(record: ExerciseResponse, field: str, value: str | None) -> bool:
+    if value is None:
+        return True
+    actual = getattr(record, field, None)
+    return actual is not None and actual.strip().lower() == value.strip().lower()
 
-    if body_part:
-        statement = statement.where(func.lower(Exercise.body_part) == body_part.strip().lower())
 
-    if equipment:
-        statement = statement.where(func.lower(Exercise.equipment) == equipment.strip().lower())
+def _search(records: list[ExerciseResponse], q: str | None) -> list[ExerciseResponse]:
+    if not q:
+        return records
+    term = q.strip().lower()
+    return [r for r in records if term in r.name.lower()]
 
-    if target:
-        statement = statement.where(func.lower(Exercise.target) == target.strip().lower())
 
-    if category:
-        statement = statement.where(Exercise.exercise_category == category.strip().lower())
-
-    return statement
+def _match_category(record: ExerciseResponse, category: str | None) -> bool:
+    if category is None:
+        return True
+    return (record.exercise_category or "").strip().lower() == category.strip().lower()
 
 
 @router.get("", response_model=ExerciseListResponse)
@@ -56,44 +50,61 @@ async def list_exercises(
     tracked: bool = Query(default=False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    response: Response = None,
 ) -> ExerciseListResponse:
-    base_statement = _apply_filters(
-        select(Exercise),
-        q=q,
-        body_part=body_part,
-        equipment=equipment,
-        target=target,
-        category=category,
-    )
+    if not tracked:
+        all_exercises = ExerciseCache.all()
+        filtered = [
+            e
+            for e in all_exercises
+            if _matches(e, "body_part", body_part)
+            and _matches(e, "equipment", equipment)
+            and _matches(e, "target", target)
+            and _match_category(e, category)
+        ]
+        filtered = _search(filtered, q)
+        total = len(filtered)
+        items = filtered[offset : offset + limit]
 
-    if tracked:
-        tracked_ids = db.execute(
-            select(ExerciseSet.exercise_id)
-            .join(WorkoutSession, ExerciseSet.session_id == WorkoutSession.id)
-            .where(
-                WorkoutSession.user_id == current_user.id,
-                WorkoutSession.is_completed.is_(True),
-            )
-            .distinct()
-        ).scalars().all()
-        if tracked_ids:
-            base_statement = base_statement.where(Exercise.id.in_(tracked_ids))
-        else:
-            base_statement = base_statement.where(False)
+        if response is not None:
+            response.headers["Cache-Control"] = "public, max-age=86400"
 
-    total = db.execute(
-        select(func.count()).select_from(base_statement.order_by(None).subquery())
-    ).scalar_one()
+        return ExerciseListResponse(
+            items=items,
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
 
-    exercises = db.execute(
-        base_statement
-        .order_by(Exercise.name.asc(), Exercise.id.asc())
-        .offset(offset)
-        .limit(limit)
+    tracked_ids = db.execute(
+        select(ExerciseSet.exercise_id)
+        .join(WorkoutSession, ExerciseSet.session_id == WorkoutSession.id)
+        .where(
+            WorkoutSession.user_id == current_user.id,
+            WorkoutSession.is_completed.is_(True),
+        )
+        .distinct()
     ).scalars().all()
 
+    if not tracked_ids:
+        return ExerciseListResponse(items=[], total=0, limit=limit, offset=offset)
+
+    all_exercises = ExerciseCache.all()
+    filtered = [
+        e
+        for e in all_exercises
+        if e.id in tracked_ids
+        and _matches(e, "body_part", body_part)
+        and _matches(e, "equipment", equipment)
+        and _matches(e, "target", target)
+        and _match_category(e, category)
+    ]
+    filtered = _search(filtered, q)
+    total = len(filtered)
+    items = filtered[offset : offset + limit]
+
     return ExerciseListResponse(
-        items=[ExerciseResponse.model_validate(exercise) for exercise in exercises],
+        items=items,
         total=total,
         limit=limit,
         offset=offset,
@@ -101,28 +112,17 @@ async def list_exercises(
 
 
 @router.get("/filters", response_model=ExerciseFiltersResponse)
-async def get_exercise_filters(
-    db: Session = Depends(get_db),
-) -> ExerciseFiltersResponse:
-    body_parts = db.execute(
-        select(Exercise.body_part)
-        .where(Exercise.body_part.is_not(None))
-        .distinct()
-        .order_by(Exercise.body_part.asc())
-    ).scalars().all()
-    equipment = db.execute(
-        select(Exercise.equipment)
-        .where(Exercise.equipment.is_not(None))
-        .distinct()
-        .order_by(Exercise.equipment.asc())
-    ).scalars().all()
-    targets = db.execute(
-        select(Exercise.target)
-        .where(Exercise.target.is_not(None))
-        .distinct()
-        .order_by(Exercise.target.asc())
-    ).scalars().all()
-
+async def get_exercise_filters() -> ExerciseFiltersResponse:
+    all_exercises = ExerciseCache.all()
+    body_parts = sorted(
+        {e.body_part.strip() for e in all_exercises if e.body_part}, key=str.casefold
+    )
+    equipment = sorted(
+        {e.equipment.strip() for e in all_exercises if e.equipment}, key=str.casefold
+    )
+    targets = sorted(
+        {e.target.strip() for e in all_exercises if e.target}, key=str.casefold
+    )
     categories = [c.value for c in ExerciseCategory]
 
     return ExerciseFiltersResponse(
@@ -136,20 +136,16 @@ async def get_exercise_filters(
 @router.get("/{exercise_id}", response_model=ExerciseDetailResponse)
 async def get_exercise(
     exercise_id: str,
-    db: Session = Depends(get_db),
+    response: Response = None,
 ) -> ExerciseDetailResponse:
-    exercise = db.execute(
-        select(Exercise)
-        .options(
-            selectinload(Exercise.instructions),
-            selectinload(Exercise.secondary_muscles),
-        )
-        .where(Exercise.id == exercise_id)
-    ).scalar_one_or_none()
+    exercise = ExerciseCache.get_detail(exercise_id)
     if exercise is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Exercise not found",
         )
 
-    return ExerciseDetailResponse.model_validate(exercise)
+    if response is not None:
+        response.headers["Cache-Control"] = "public, max-age=86400"
+
+    return exercise
