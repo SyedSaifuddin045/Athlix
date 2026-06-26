@@ -9,7 +9,7 @@ from app.core.personal_records import (
     run_pr_detector_for_session,
     sync_personal_records_for_exercises,
 )
-from app.models.exercise import Exercise
+from app.models.exercise import Exercise, ExerciseInstruction
 from app.exercise_cache import CANONICAL_CARDIO_EXERCISES
 from app.models.mesocycle import Mesocycle
 from app.models.records import PersonalRecord
