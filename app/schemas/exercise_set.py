@@ -9,10 +9,10 @@ class ExerciseSetCreate(BaseSchema):
     exercise_id: str
     set_number: int
     set_type: str
-    reps: int | None = None
-    weight_kg: float | None = None
-    duration_sec: int | None = None
-    distance_m: float | None = None
+    reps: int | None = Field(None, gt=0)
+    weight_kg: float | None = Field(None, gt=0)
+    duration_sec: int | None = Field(None, gt=0)
+    distance_m: float | None = Field(None, gt=0)
     rpe: float | None = Field(None, ge=1.0, le=10.0)
     is_pr: bool = False
     notes: str | None = None
@@ -23,10 +23,10 @@ class ExerciseSetUpdate(BaseSchema):
     exercise_id: str | None = None
     set_number: int | None = None
     set_type: str | None = None
-    reps: int | None = None
-    weight_kg: float | None = None
-    duration_sec: int | None = None
-    distance_m: float | None = None
+    reps: int | None = Field(None, gt=0)
+    weight_kg: float | None = Field(None, gt=0)
+    duration_sec: int | None = Field(None, gt=0)
+    distance_m: float | None = Field(None, gt=0)
     rpe: float | None = Field(None, ge=1.0, le=10.0)
     is_pr: bool | None = None
     notes: str | None = None

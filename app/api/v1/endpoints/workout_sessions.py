@@ -304,6 +304,21 @@ def _ensure_exercise_exists(db: Session, exercise_id: str) -> None:
                 "met_value": data["met_value"],
             },
         )
+        instructions = data.get("instructions", [])
+        for i, instruction in enumerate(instructions):
+            db.execute(
+                text("""
+                    INSERT INTO app_schema.exercise_instructions
+                        (exercise_id, step_number, instruction)
+                    VALUES
+                        (:exercise_id, :step_number, :instruction)
+                """),
+                {
+                    "exercise_id": exercise_id,
+                    "step_number": i + 1,
+                    "instruction": instruction,
+                },
+            )
         db.flush()
         return
 
