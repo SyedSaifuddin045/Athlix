@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select, func
@@ -86,61 +86,155 @@ def _compute_session_stats(
     return stats
 
 
+def _compute_age(date_of_birth: date | None) -> int | None:
+    if date_of_birth is None:
+        return None
+    today = date.today()
+    return today.year - date_of_birth.year - (
+        (today.month, today.day) < (date_of_birth.month, date_of_birth.day)
+    )
+
+
+def _compute_bmr_hourly(
+    weight_kg: float, height_cm: float | None, age: int | None, gender: str | None
+) -> float | None:
+    if height_cm is None or age is None or gender is None:
+        return None
+    if gender and gender.lower() in ("male", "m"):
+        bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
+    elif gender and gender.lower() in ("female", "f"):
+        bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age - 161
+    else:
+        bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age
+    return bmr / 24.0
+
+
+def _get_activity_calorie_type(name: str) -> str:
+    lowered = name.lower()
+    if any(kw in lowered for kw in ("run", "jog")):
+        return "running"
+    if "walk" in lowered:
+        return "walking"
+    if "hike" in lowered:
+        return "hiking"
+    return "met"
+
+
 def _compute_calories(
     db: Session, sets: list[ExerciseSet], user_id: int
 ) -> float | None:
     from app.models.user import UserProfile
     profile = db.execute(
-        select(UserProfile.weight_kg).where(UserProfile.user_id == user_id)
-    ).scalar_one_or_none()
-    if profile is None:
+        select(
+            UserProfile.weight_kg,
+            UserProfile.height_cm,
+            UserProfile.gender,
+            UserProfile.date_of_birth,
+        ).where(UserProfile.user_id == user_id)
+    ).first()
+    if profile is None or profile.weight_kg is None:
         return None
-    weight_kg = float(profile)
+
+    weight_kg = float(profile.weight_kg)
+    height_cm = float(profile.height_cm) if profile.height_cm else None
+    gender = profile.gender
+    age = _compute_age(profile.date_of_birth)
+    bmr_hr = _compute_bmr_hourly(weight_kg, height_cm, age, gender)
 
     exercise_ids = list(set(s.exercise_id for s in sets))
     exercise_met_map: dict[str, float | None] = {}
+    exercise_name_map: dict[str, str] = {}
     for eid in exercise_ids:
-        met = db.execute(
-            select(Exercise.met_value).where(Exercise.id == eid)
-        ).scalar_one_or_none()
-        exercise_met_map[eid] = float(met) if met is not None else None
+        row = db.execute(
+            select(Exercise.met_value, Exercise.name).where(Exercise.id == eid)
+        ).first()
+        exercise_met_map[eid] = float(row.met_value) if row and row.met_value is not None else None
+        exercise_name_map[eid] = row.name if row else ""
 
     total = 0.0
     has_cardio = False
     for s in sets:
         met = exercise_met_map.get(s.exercise_id)
-        if met is None or s.duration_sec is None or s.duration_sec == 0:
+        name = exercise_name_map.get(s.exercise_id, "")
+        if s.duration_sec is None or s.duration_sec == 0:
             continue
-        rpe = s.rpe if s.rpe is not None else 5.0
+
         hours = s.duration_sec / 3600.0
-        total += met * (rpe / 5.0) * weight_kg * hours
-        has_cardio = True
+        cal_type = _get_activity_calorie_type(name)
+        distance_km = (s.distance_m or 0) / 1000.0
+
+        if cal_type != "met" and distance_km > 0:
+            factor = {"running": 1.036, "walking": 0.5, "hiking": 0.6}.get(cal_type, 1.036)
+            cal = weight_kg * distance_km * factor
+            has_cardio = True
+        elif met is not None:
+            rpe = s.rpe if s.rpe is not None else 5.0
+            height_factor = 1.0 + (height_cm - 170.0) * 0.002 if height_cm else 1.0
+            cal = met * (rpe / 5.0) * weight_kg * hours * height_factor
+            has_cardio = True
+        else:
+            continue
+
+        if bmr_hr and cal < bmr_hr * hours:
+            cal = bmr_hr * hours
+        total += cal
 
     return round(total, 1) if has_cardio else None
 
 
 def _compute_set_calories(
-    db: Session, exercise_id: str, set_rpe: float | None, set_duration_sec: int | None, user_id: int
+    db: Session,
+    exercise_id: str,
+    set_rpe: float | None,
+    set_duration_sec: int | None,
+    distance_m: float | None,
+    user_id: int,
 ) -> float | None:
     if set_duration_sec is None or set_duration_sec == 0:
         return None
 
-    met = db.execute(
-        select(Exercise.met_value).where(Exercise.id == exercise_id)
-    ).scalar_one_or_none()
-    if met is None:
-        return None
-
     from app.models.user import UserProfile
-    weight_kg = db.execute(
-        select(UserProfile.weight_kg).where(UserProfile.user_id == user_id)
-    ).scalar_one_or_none()
-    if weight_kg is None:
+    profile = db.execute(
+        select(
+            UserProfile.weight_kg,
+            UserProfile.height_cm,
+            UserProfile.gender,
+            UserProfile.date_of_birth,
+        ).where(UserProfile.user_id == user_id)
+    ).first()
+    if profile is None or profile.weight_kg is None:
         return None
 
-    rpe = set_rpe if set_rpe is not None else 5.0
+    weight_kg = float(profile.weight_kg)
+    height_cm = float(profile.height_cm) if profile.height_cm else None
+    gender = profile.gender
+    age = _compute_age(profile.date_of_birth)
+    bmr_hr = _compute_bmr_hourly(weight_kg, height_cm, age, gender)
+
+    row = db.execute(
+        select(Exercise.met_value, Exercise.name).where(Exercise.id == exercise_id)
+    ).first()
+    if row is None or row.met_value is None:
+        return None
+    met_val = float(row.met_value)
+    name = row.name or ""
+
     hours = set_duration_sec / 3600.0
-    return round(float(met) * (rpe / 5.0) * float(weight_kg) * hours, 1)
+    cal_type = _get_activity_calorie_type(name)
+    dist_km = (distance_m or 0) / 1000.0
+
+    if cal_type != "met" and dist_km > 0:
+        factor = {"running": 1.036, "walking": 0.5, "hiking": 0.6}.get(cal_type, 1.036)
+        cal = weight_kg * dist_km * factor
+    else:
+        rpe = set_rpe if set_rpe is not None else 5.0
+        height_factor = 1.0 + (height_cm - 170.0) * 0.002 if height_cm else 1.0
+        cal = met_val * (rpe / 5.0) * weight_kg * hours * height_factor
+
+    if bmr_hr and cal < bmr_hr * hours:
+        cal = bmr_hr * hours
+
+    return round(cal, 1)
 
 
 def _get_workout_session(
@@ -320,7 +414,7 @@ async def get_workout_session(
         enriched_sets = []
         for s in session.sets:
             s_dict = s.__dict__.copy()
-            cal = _compute_set_calories(db, s.exercise_id, s.rpe, s.duration_sec, current_user.id)
+            cal = _compute_set_calories(db, s.exercise_id, s.rpe, s.duration_sec, s.distance_m, current_user.id)
             s_dict["calories_burned"] = cal
             from app.schemas.exercise_set import ExerciseSetResponse
             enriched_sets.append(ExerciseSetResponse.model_validate(s_dict))
