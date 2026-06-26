@@ -13,7 +13,6 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.exercise_cache import ExerciseCache
-from app.response_cache import ResponseCacheMiddleware
 
 
 def _rate_limit_key(request: Request) -> str:
@@ -65,7 +64,6 @@ app.add_middleware(
     allow_headers=settings.cors_allowed_headers,
 )
 
-app.add_middleware(ResponseCacheMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(api_router)
