@@ -101,14 +101,30 @@ def _compute_age(date_of_birth: date | None) -> int | None:
     )
 
 
+def _get_profile_or_defaults(db: Session, user_id: int) -> dict:
+    from app.models.user import UserProfile
+    profile = db.execute(
+        select(
+            UserProfile.weight_kg,
+            UserProfile.height_cm,
+            UserProfile.gender,
+            UserProfile.date_of_birth,
+        ).where(UserProfile.user_id == user_id)
+    ).first()
+    return {
+        "weight_kg": float(profile.weight_kg) if profile and profile.weight_kg else 70.0,
+        "height_cm": float(profile.height_cm) if profile and profile.height_cm else 170.0,
+        "gender": profile.gender if profile and profile.gender else "male",
+        "age": _compute_age(profile.date_of_birth) if profile and profile.date_of_birth else 30,
+    }
+
+
 def _compute_bmr_hourly(
-    weight_kg: float, height_cm: float | None, age: int | None, gender: str | None
-) -> float | None:
-    if height_cm is None or age is None or gender is None:
-        return None
-    if gender and gender.lower() in ("male", "m"):
+    weight_kg: float, height_cm: float, age: int, gender: str
+) -> float:
+    if gender.lower() in ("male", "m"):
         bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
-    elif gender and gender.lower() in ("female", "f"):
+    elif gender.lower() in ("female", "f"):
         bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age - 161
     else:
         bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age
@@ -129,22 +145,11 @@ def _get_activity_calorie_type(name: str) -> str:
 def _compute_calories(
     db: Session, sets: list[ExerciseSet], user_id: int
 ) -> float | None:
-    from app.models.user import UserProfile
-    profile = db.execute(
-        select(
-            UserProfile.weight_kg,
-            UserProfile.height_cm,
-            UserProfile.gender,
-            UserProfile.date_of_birth,
-        ).where(UserProfile.user_id == user_id)
-    ).first()
-    if profile is None or profile.weight_kg is None:
-        return None
-
-    weight_kg = float(profile.weight_kg)
-    height_cm = float(profile.height_cm) if profile.height_cm else None
-    gender = profile.gender
-    age = _compute_age(profile.date_of_birth)
+    p = _get_profile_or_defaults(db, user_id)
+    weight_kg = p["weight_kg"]
+    height_cm = p["height_cm"]
+    gender = p["gender"]
+    age = p["age"]
     bmr_hr = _compute_bmr_hourly(weight_kg, height_cm, age, gender)
 
     exercise_ids = list(set(s.exercise_id for s in sets))
@@ -199,22 +204,11 @@ def _compute_set_calories(
     if set_duration_sec is None or set_duration_sec == 0:
         return None
 
-    from app.models.user import UserProfile
-    profile = db.execute(
-        select(
-            UserProfile.weight_kg,
-            UserProfile.height_cm,
-            UserProfile.gender,
-            UserProfile.date_of_birth,
-        ).where(UserProfile.user_id == user_id)
-    ).first()
-    if profile is None or profile.weight_kg is None:
-        return None
-
-    weight_kg = float(profile.weight_kg)
-    height_cm = float(profile.height_cm) if profile.height_cm else None
-    gender = profile.gender
-    age = _compute_age(profile.date_of_birth)
+    p = _get_profile_or_defaults(db, user_id)
+    weight_kg = p["weight_kg"]
+    height_cm = p["height_cm"]
+    gender = p["gender"]
+    age = p["age"]
     bmr_hr = _compute_bmr_hourly(weight_kg, height_cm, age, gender)
 
     row = db.execute(
@@ -275,11 +269,36 @@ def _get_exercise_set(
     ).scalar_one_or_none()
 
 
+def _ensure_exercise_instructions(db: Session, exercise_id: str) -> None:
+    data = CANONICAL_CARDIO_EXERCISES.get(exercise_id)
+    if not data:
+        return
+    instructions = data.get("instructions", [])
+    if not instructions:
+        return
+    existing_count = db.execute(
+        select(func.count()).select_from(ExerciseInstruction)
+        .where(ExerciseInstruction.exercise_id == exercise_id)
+    ).scalar()
+    if existing_count and existing_count > 0:
+        return
+    for i, instruction in enumerate(instructions):
+        db.execute(
+            text("""
+                INSERT INTO app_schema.exercise_instructions
+                    (exercise_id, step_number, instruction)
+                VALUES (:eid, :step, :instr)
+            """),
+            {"eid": exercise_id, "step": i + 1, "instr": instruction},
+        )
+
+
 def _ensure_exercise_exists(db: Session, exercise_id: str) -> None:
     exercise = db.execute(
         select(Exercise.id).where(Exercise.id == exercise_id)
     ).scalar_one_or_none()
     if exercise is not None:
+        _ensure_exercise_instructions(db, exercise_id)
         return
 
     if exercise_id in CANONICAL_CARDIO_EXERCISES:
