@@ -298,7 +298,6 @@ def _ensure_exercise_exists(db: Session, exercise_id: str) -> None:
         select(Exercise.id).where(Exercise.id == exercise_id)
     ).scalar_one_or_none()
     if exercise is not None:
-        _ensure_exercise_instructions(db, exercise_id)
         return
 
     if exercise_id in CANONICAL_CARDIO_EXERCISES:
