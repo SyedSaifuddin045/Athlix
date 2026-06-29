@@ -122,6 +122,8 @@ class ExerciseSet(Base):
 
     rpe: Mapped[float | None]
 
+    calories_burned: Mapped[float | None]
+
     is_pr: Mapped[bool]
 
     notes: Mapped[str | None]

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -32,6 +32,7 @@ router = APIRouter(prefix="/progress", tags=["Progress"])
 async def get_exercise_progress(
     exercise_id: str,
     formula: str = Query(default=DEFAULT_E1RM_FORMULA),
+    weeks: int | None = Query(default=None, ge=1),
     reference_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -67,6 +68,12 @@ async def get_exercise_progress(
         rows,
         default_formula=normalized_formula,
     )
+
+    if weeks is not None:
+        cutoff = datetime.now(timezone.utc) - timedelta(weeks=weeks)
+        session_summaries = [
+            s for s in session_summaries if s.performed_at >= cutoff
+        ]
     weekly_volume = calculate_weekly_volume_summaries(session_summaries)
     overload_points = detect_progressive_overload(session_summaries)
 
@@ -97,10 +104,18 @@ async def get_exercise_progress(
         for summary in session_summaries
     ]
 
+    current_e1rm = progress_points[-1].default_e1rm if progress_points else None
+    best_e1rm = max(
+        (p.default_e1rm for p in progress_points if p.default_e1rm is not None),
+        default=None,
+    )
+
     return ExerciseProgressResponse(
         exercise_id=exercise.id,
         exercise_name=exercise.name,
         default_formula=normalized_formula,
+        current_e1rm=current_e1rm,
+        best_e1rm=best_e1rm,
         e1rm_history=progress_points,
         volume_history=progress_points,
         weekly_volume_history=[
@@ -122,6 +137,8 @@ async def get_exercise_progress(
                 current_best_weight_kg=item.current_best_weight_kg,
                 previous_best_weight_kg=item.previous_best_weight_kg,
                 best_weight_delta=item.best_weight_delta,
+                current_best_reps=item.current_best_reps,
+                previous_best_reps=item.previous_best_reps,
                 current_default_e1rm=item.current_default_e1rm,
                 previous_default_e1rm=item.previous_default_e1rm,
                 default_e1rm_delta=item.default_e1rm_delta,

@@ -482,8 +482,9 @@ async def get_workout_session(
         enriched_sets = []
         for s in session.sets:
             s_dict = s.__dict__.copy()
-            cal = _compute_set_calories(db, s.exercise_id, s.rpe, s.duration_sec, s.distance_m, current_user.id)
-            s_dict["calories_burned"] = cal
+            if s.calories_burned is None:
+                cal = _compute_set_calories(db, s.exercise_id, s.rpe, s.duration_sec, s.distance_m, current_user.id)
+                s_dict["calories_burned"] = cal
             from app.schemas.exercise_set import ExerciseSetResponse
             enriched_sets.append(ExerciseSetResponse.model_validate(s_dict))
         session_dict["sets"] = enriched_sets

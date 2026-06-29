@@ -90,6 +90,8 @@ class ProgressiveOverloadSummary:
     current_best_weight_kg: float | None
     previous_best_weight_kg: float | None
     best_weight_delta: float | None
+    current_best_reps: int | None
+    previous_best_reps: int | None
     current_default_e1rm: float | None
     previous_default_e1rm: float | None
     default_e1rm_delta: float | None
@@ -471,6 +473,8 @@ def detect_progressive_overload(
                 current_best_weight_kg=current.best_weight_kg,
                 previous_best_weight_kg=previous.best_weight_kg,
                 best_weight_delta=best_weight_delta,
+                current_best_reps=current.best_reps,
+                previous_best_reps=previous.best_reps,
                 current_default_e1rm=current.default_e1rm,
                 previous_default_e1rm=previous.default_e1rm,
                 default_e1rm_delta=default_e1rm_delta,

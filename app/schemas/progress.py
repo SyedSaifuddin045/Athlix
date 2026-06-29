@@ -37,6 +37,8 @@ class ProgressiveOverloadResponse(BaseSchema):
     current_best_weight_kg: float | None
     previous_best_weight_kg: float | None
     best_weight_delta: float | None
+    current_best_reps: int | None
+    previous_best_reps: int | None
     current_default_e1rm: float | None
     previous_default_e1rm: float | None
     default_e1rm_delta: float | None
@@ -54,6 +56,8 @@ class ExerciseProgressResponse(BaseSchema):
     exercise_id: str
     exercise_name: str
     default_formula: str
+    current_e1rm: float | None = None
+    best_e1rm: float | None = None
     e1rm_history: list[ExerciseProgressPointResponse]
     volume_history: list[ExerciseProgressPointResponse]
     weekly_volume_history: list[WeeklyVolumeProgressPointResponse]

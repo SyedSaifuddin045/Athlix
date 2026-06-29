@@ -14,6 +14,7 @@ class ExerciseSetCreate(BaseSchema):
     duration_sec: int | None = Field(None, gt=0)
     distance_m: float | None = Field(None, gt=0)
     rpe: float | None = Field(None, ge=1.0, le=10.0)
+    calories_burned: float | None = None
     is_pr: bool = False
     notes: str | None = None
     logged_at: datetime | None = None
