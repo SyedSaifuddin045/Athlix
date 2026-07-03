@@ -1,3 +1,4 @@
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from math import ceil
@@ -772,12 +773,12 @@ def calculate_weekly_activity(
         reference_date = datetime.now(timezone.utc).date()
 
     week_start = reference_date - timedelta(days=reference_date.weekday())
-    active_dates = {dt.date() for dt in session_datetimes}
+    date_counts = Counter(dt.date() for dt in session_datetimes)
 
     return [
         WeeklyActivityDay(
             day=DAY_LABELS[i],
-            value=1 if (week_start + timedelta(days=i)) in active_dates else 0,
+            value=date_counts.get(week_start + timedelta(days=i), 0),
         )
         for i in range(7)
     ]
