@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     google_group_email: str | None = Field(None, alias="GOOGLE_GROUP_EMAIL")
     play_optin_url: str | None = Field(None, alias="PLAY_OPTIN_URL")
 
+    fcm_project_id: str = Field("", alias="FCM_PROJECT_ID")
+    fcm_client_email: str = Field("", alias="FCM_CLIENT_EMAIL")
+    fcm_private_key: str = Field("", alias="FCM_PRIVATE_KEY")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
