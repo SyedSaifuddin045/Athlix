@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -10,6 +11,9 @@ from app.notifications.schemas import (
     DeviceRegisterRequest,
     DeviceUnregisterRequest,
     DeviceResponse,
+    NotificationSettingsResponse,
+    NotificationSettingsUpdate,
+    NotificationSettingsDetectRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,3 +55,49 @@ async def list_devices(
 ) -> list[DeviceResponse]:
     devices = repo.get_active_devices(current_user.id)
     return [DeviceResponse.model_validate(d) for d in devices]
+
+
+@router.get("/settings", response_model=NotificationSettingsResponse)
+async def get_notification_settings(
+    repo: NotificationRepository = Depends(_get_repo),
+    current_user: User = Depends(get_current_user),
+) -> NotificationSettingsResponse:
+    """Get current user's notification settings."""
+    settings = repo.get_settings(current_user.id)
+    if settings is None:
+        return NotificationSettingsResponse(
+            morning_motivation_enabled=False,
+            inactivity_nudge_enabled=False,
+            milestone_enabled=False,
+            timezone="UTC",
+            preferred_send_hour=8,
+            inactivity_threshold_hours=72,
+            last_milestone_workout_count=0,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+    return NotificationSettingsResponse.model_validate(settings)
+
+
+@router.put("/settings", response_model=NotificationSettingsResponse)
+async def update_notification_settings(
+    payload: NotificationSettingsUpdate,
+    repo: NotificationRepository = Depends(_get_repo),
+    current_user: User = Depends(get_current_user),
+) -> NotificationSettingsResponse:
+    """Update notification settings (partial update supported)."""
+    updates = payload.model_dump(exclude_none=True)
+    settings = repo.upsert_settings(current_user.id, updates)
+    return NotificationSettingsResponse.model_validate(settings)
+
+
+@router.post("/settings/detect", response_model=NotificationSettingsResponse)
+async def detect_notification_settings(
+    payload: NotificationSettingsDetectRequest,
+    repo: NotificationRepository = Depends(_get_repo),
+    current_user: User = Depends(get_current_user),
+) -> NotificationSettingsResponse:
+    """Submit detected timezone/workout patterns from mobile device."""
+    updates = payload.model_dump()
+    settings = repo.upsert_settings(current_user.id, updates)
+    return NotificationSettingsResponse.model_validate(settings)
