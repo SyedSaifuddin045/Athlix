@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from app.api.deps import get_current_user
+from app.notifications import router as notifications_router
 
 from .endpoints import (
     analytics,
@@ -66,6 +67,11 @@ api_router.include_router(
 
 api_router.include_router(
     feedback.router,
+    dependencies=[Depends(get_current_user)],
+)
+
+api_router.include_router(
+    notifications_router,
     dependencies=[Depends(get_current_user)],
 )
 

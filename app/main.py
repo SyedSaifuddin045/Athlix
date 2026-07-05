@@ -14,6 +14,11 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.exercise_cache import ExerciseCache
 
+import json
+from app.notifications.providers import FCMProvider
+from app.notifications.service import NotificationService
+from app.notifications.repository import NotificationRepository as NotifRepo
+
 
 def _rate_limit_key(request: Request) -> str:
     auth = request.headers.get("Authorization", "")
@@ -65,6 +70,30 @@ app.add_middleware(
 )
 
 app.add_middleware(SlowAPIMiddleware)
+
+# -- Notification Service Initialization --
+if settings.fcm_project_id and settings.fcm_private_key:
+    try:
+        service_account_info = {
+            "type": "service_account",
+            "project_id": settings.fcm_project_id,
+            "private_key": settings.fcm_private_key,
+            "client_email": settings.fcm_client_email,
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+        fcm_provider = FCMProvider(service_account_info)
+        notification_service = NotificationService.__new__(NotificationService)
+        notification_service._providers = {"android": fcm_provider}
+        # Add to app state so endpoints can access it
+        app.state.notification_service = notification_service
+        logger = logging.getLogger(__name__)
+        logger.info("Notification service initialized with FCM")
+    except Exception as exc:
+        logger = logging.getLogger(__name__)
+        logger.warning("FCM not available: %s. Notifications disabled.", exc)
+        app.state.notification_service = None
+else:
+    app.state.notification_service = None
 
 app.include_router(api_router)
 
