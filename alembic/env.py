@@ -8,6 +8,7 @@ from app.models.base import Base
 
 # Import models so metadata gets populated
 import app.models
+import app.notifications.models  # noqa: F401 — push notification models
 
 config = context.config
 
