@@ -80,7 +80,7 @@ if settings.fcm_project_id and settings.fcm_private_key:
         service_account_info = {
             "type": "service_account",
             "project_id": settings.fcm_project_id,
-            "private_key": settings.fcm_private_key,
+            "private_key": settings.fcm_private_key.replace("\\n", "\n"),
             "client_email": settings.fcm_client_email,
             "token_uri": "https://oauth2.googleapis.com/token",
         }
