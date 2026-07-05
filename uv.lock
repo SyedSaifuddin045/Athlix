@@ -53,6 +53,18 @@ wheels = [
 ]
 
 [[package]]
+name = "apscheduler"
+version = "3.11.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tzlocal" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8c/6b/eeff360196bb20b312c9e762a820fd1b2c6d809466c755ef57863478e454/apscheduler-3.11.3.tar.gz", hash = "sha256:cd2fcc9330039a81a5893472ad49facf23a6d5604cbe1d918c835c6de7834d5a", size = 110312, upload-time = "2026-06-28T19:39:22.493Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/42/c9/8638db32514dbb9157b3d82680c6faea89283523edf9ed2415ea3884f2ae/apscheduler-3.11.3-py3-none-any.whl", hash = "sha256:bbeb2ec02d23d3c06a6c07ed7f0f3939ada6680eb121fae809a69bb42c537a30", size = 66024, upload-time = "2026-06-28T19:39:20.982Z" },
+]
+
+[[package]]
 name = "cachecontrol"
 version = "0.14.4"
 source = { registry = "https://pypi.org/simple" }
@@ -369,6 +381,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
+    { name = "apscheduler" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "firebase-admin" },
@@ -377,6 +390,7 @@ dependencies = [
     { name = "pydantic", extra = ["email"] },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
+    { name = "pytz" },
     { name = "slowapi" },
     { name = "sqlalchemy" },
     { name = "uvicorn" },
@@ -392,6 +406,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.18.4" },
+    { name = "apscheduler", specifier = ">=3.11.0" },
     { name = "cryptography", specifier = ">=44.0.1" },
     { name = "fastapi", specifier = ">=0.135.1" },
     { name = "firebase-admin", specifier = ">=6.6.0" },
@@ -400,6 +415,7 @@ requires-dist = [
     { name = "pydantic", extras = ["email"], specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
     { name = "pyjwt", specifier = ">=2.10.1" },
+    { name = "pytz", specifier = ">=2024.1" },
     { name = "slowapi", specifier = ">=0.1.10" },
     { name = "sqlalchemy", specifier = ">=2.0.48" },
     { name = "uvicorn", specifier = ">=0.41.0" },
@@ -1268,6 +1284,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pytz"
+version = "2026.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ff/46/dd499ec9038423421951e4fad73051febaa13d2df82b4064f87af8b8c0c3/pytz-2026.2.tar.gz", hash = "sha256:0e60b47b29f21574376f218fe21abc009894a2321ea16c6754f3cad6eb7cdd6a", size = 320861, upload-time = "2026-05-04T01:35:29.667Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ec/dd/96da98f892250475bdf2328112d7468abdd4acc7b902b6af23f4ed958ea0/pytz-2026.2-py2.py3-none-any.whl", hash = "sha256:04156e608bee23d3792fd45c94ae47fae1036688e75032eea2e3bf0323d1f126", size = 510141, upload-time = "2026-05-04T01:35:27.408Z" },
+]
+
+[[package]]
 name = "requests"
 version = "2.34.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1388,6 +1413,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5e/a7/c202b344c5ca7daf398f3b8a477eeb205cf3b6f32e7ec3a6bac0629ca975/tzdata-2025.3.tar.gz", hash = "sha256:de39c2ca5dc7b0344f2eba86f49d614019d29f060fc4ebc8a417896a620b56a7", size = 196772, upload-time = "2025-12-13T17:45:35.667Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/b0/003792df09decd6849a5e39c28b513c06e84436a54440380862b5aeff25d/tzdata-2025.3-py2.py3-none-any.whl", hash = "sha256:06a47e5700f3081aab02b2e513160914ff0694bce9947d6b76ebd6bf57cfc5d1", size = 348521, upload-time = "2025-12-13T17:45:33.889Z" },
+]
+
+[[package]]
+name = "tzlocal"
+version = "5.4.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/81/5b/879b2f932adfa7a053c360d50bc896c977fa6426109185f7c12ebdd0cb9d/tzlocal-5.4.4.tar.gz", hash = "sha256:8dbb8660838688a7b6ba4fed31d18dedf842afb4d47ca050d6d891c2c15f3be4", size = 31170, upload-time = "2026-06-29T08:03:40.026Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9e/a4/017a7a6cbe387d961a688ec31364ae60a5c4e22c96ae9921b79a947c855d/tzlocal-5.4.4-py3-none-any.whl", hash = "sha256:aae09f0126a8a86fa736be266eb4a471380d26a0de3bc14844e7821fee3e2a15", size = 18115, upload-time = "2026-06-29T08:03:38.666Z" },
 ]
 
 [[package]]
