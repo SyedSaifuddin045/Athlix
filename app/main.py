@@ -18,6 +18,9 @@ import json
 from app.notifications.providers import FCMProvider
 from app.notifications.service import NotificationService
 from app.notifications.repository import NotificationRepository as NotifRepo
+from app.notifications.scheduler import create_scheduler, register_jobs
+
+logger = logging.getLogger(__name__)
 
 
 def _rate_limit_key(request: Request) -> str:
@@ -82,24 +85,27 @@ if settings.fcm_project_id and settings.fcm_private_key:
             "token_uri": "https://oauth2.googleapis.com/token",
         }
         fcm_provider = FCMProvider(service_account_info)
-        notification_service = NotificationService.__new__(NotificationService)
-        notification_service._providers = {"android": fcm_provider}
-        # Add to app state so endpoints can access it
+        notification_service = NotificationService(
+            repository=NotifRepo(SessionLocal()),
+            providers={"android": fcm_provider},
+        )
         app.state.notification_service = notification_service
-        logger = logging.getLogger(__name__)
         logger.info("Notification service initialized with FCM")
     except Exception as exc:
-        logger = logging.getLogger(__name__)
         logger.warning("FCM not available: %s. Notifications disabled.", exc)
         app.state.notification_service = None
 else:
     app.state.notification_service = None
 
+# -- APScheduler Setup --
+scheduler = create_scheduler(settings.database_url)
+
 app.include_router(api_router)
 
 
 @app.on_event("startup")
-async def warm_exercise_cache():
+async def startup():
+    # Warm exercise cache
     try:
         db = SessionLocal()
         ExerciseCache.load(db)
@@ -107,6 +113,22 @@ async def warm_exercise_cache():
         pass
     finally:
         db.close()
+
+    # Start notification scheduler
+    ns = getattr(app.state, "notification_service", None)
+    if ns is not None:
+        register_jobs(scheduler, ns)
+        scheduler.start()
+        logger.info("Notification scheduler started")
+    else:
+        logger.warning("Notification scheduler not started (no FCM)")
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+        logger.info("Notification scheduler shut down")
 
 
 def _format_validation_errors(errors: list[dict]) -> list[dict[str, str]]:
