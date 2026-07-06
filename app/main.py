@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -120,6 +120,47 @@ else:
 scheduler = create_scheduler(settings.database_url)
 
 app.include_router(api_router)
+
+
+# -- Privacy Policy --
+@app.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
+async def privacy_policy() -> HTMLResponse:
+    return HTMLResponse(content="""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Privacy Policy – Athelix</title><style>
+  body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:720px;margin:0 auto;padding:2rem 1.5rem;line-height:1.7;color:#e0e0e0;background:#0a0a0a}
+  h1{color:#fff;font-size:1.6rem}h2{color:#fff;font-size:1.15rem;margin-top:2rem}
+  p,li{color:#aaa;font-size:0.92rem}a{color:#FF5A36}
+  footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid rgba(255,255,255,0.08);font-size:0.82rem;color:#666}
+</style></head><body>
+<h1>Privacy Policy</h1>
+<p><strong>Last updated:</strong> July 2026</p>
+
+<h2>1. Information We Collect</h2>
+<p>We collect information you provide when creating an account (email, display name), workout data you log (exercises, sets, reps, weights, body measurements), and device information (push notification tokens). We use Clerk for authentication — Clerk processes and stores your authentication credentials under their privacy policy.</p>
+
+<h2>2. How We Use Your Data</h2>
+<p>Your data is used solely to operate and improve the Athelix fitness tracking service: storing workout logs, generating progress analytics, sending push notifications you opt into, and diagnosing technical issues.</p>
+
+<h2>3. Data Sharing</h2>
+<p>We do not sell your personal data. We may share anonymised, aggregate data for analytics. We may disclose data if required by law.</p>
+
+<h2>4. Data Retention</h2>
+<p>We retain your workout data and profile for as long as your account is active. If you delete your account, we delete your personal data within 30 days.</p>
+
+<h2>5. Your Rights</h2>
+<p>You can access, correct, or delete your data at any time through the app. Contact us at <a href="mailto:support@athelix.fit">support@athelix.fit</a> for assistance.</p>
+
+<h2>6. Third-Party Services</h2>
+<p><strong>Clerk</strong> — authentication (<a href="https://clerk.com/privacy" target="_blank">Clerk Privacy Policy</a>).<br>
+<strong>PostHog</strong> — product analytics (<a href="https://posthog.com/privacy" target="_blank">PostHog Privacy Policy</a>).<br>
+<strong>Firebase Cloud Messaging</strong> — push notifications (<a href="https://firebase.google.com/support/privacy" target="_blank">Firebase Privacy Policy</a>).</p>
+
+<h2>7. Contact</h2>
+<p>Email: <a href="mailto:support@athelix.fit">support@athelix.fit</a></p>
+
+<footer>&copy; 2026 Athelix. All rights reserved.</footer>
+</body></html>""", media_type="text/html")
 
 
 @app.on_event("startup")

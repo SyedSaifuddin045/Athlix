@@ -1,12 +1,14 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.notifications.repository import NotificationRepository
+from app.notifications.service import NotificationService
 from app.notifications.schemas import (
     DeviceRegisterRequest,
     DeviceUnregisterRequest,
@@ -101,3 +103,40 @@ async def detect_notification_settings(
     updates = payload.model_dump()
     settings = repo.upsert_settings(current_user.id, updates)
     return NotificationSettingsResponse.model_validate(settings)
+
+
+@router.post("/test", status_code=200)
+async def send_test_notification(
+    request: Request,
+    repo: NotificationRepository = Depends(_get_repo),
+    current_user: User = Depends(get_current_user),
+) -> JSONResponse:
+    """Send a test push notification to the current user's devices."""
+    ns: NotificationService | None = getattr(request.app.state, "notification_service", None)
+    if ns is None:
+        return JSONResponse(
+            status_code=503,
+            content={"ok": False, "message": "Notification service not available (FCM not configured)"},
+        )
+
+    devices = repo.get_active_devices(current_user.id)
+    if not devices:
+        return JSONResponse(
+            status_code=200,
+            content={"ok": False, "message": "No active devices found. Register a device first."},
+        )
+
+    result = await ns.send_to_user(
+        user_id=current_user.id,
+        title="🔔 Test Notification",
+        body="This is a test push from Athelix. If you see this, notifications are working!",
+        data={"screen": "settings"},
+    )
+
+    return JSONResponse(content={
+        "ok": result.sent > 0,
+        "total_devices": result.total,
+        "sent": result.sent,
+        "failed": result.failed,
+        "message": f"Sent to {result.sent}/{result.total} devices ({result.failed} failed)",
+    })
