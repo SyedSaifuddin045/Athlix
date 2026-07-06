@@ -94,15 +94,9 @@ def _normalize_pem_key(raw: str) -> str:
 
 
 # -- Notification Service Initialization --
-if settings.fcm_project_id and settings.fcm_private_key:
+if settings.fcm_service_account_json:
     try:
-        service_account_info = {
-            "type": "service_account",
-            "project_id": settings.fcm_project_id,
-            "private_key": _normalize_pem_key(settings.fcm_private_key),
-            "client_email": settings.fcm_client_email,
-            "token_uri": "https://oauth2.googleapis.com/token",
-        }
+        service_account_info = json.loads(settings.fcm_service_account_json)
         fcm_provider = FCMProvider(service_account_info)
         notification_service = NotificationService(
             repository=NotifRepo(SessionLocal()),

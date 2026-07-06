@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     fcm_project_id: str = Field("", alias="FCM_PROJECT_ID")
     fcm_client_email: str = Field("", alias="FCM_CLIENT_EMAIL")
     fcm_private_key: str = Field("", alias="FCM_PRIVATE_KEY")
+    fcm_service_account_json: str | None = Field(None, alias="FCM_SERVICE_ACCOUNT_JSON")
 
     model_config = SettingsConfigDict(
         env_file=".env",
