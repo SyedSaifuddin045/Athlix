@@ -22,6 +22,14 @@ from app.notifications.service import NotificationService
 
 logger = logging.getLogger(__name__)
 
+# Module-level notification service reference (set at startup, read by jobs)
+_notification_service: NotificationService | None = None
+
+def set_notification_service(ns: NotificationService | None) -> None:
+    global _notification_service
+    _notification_service = ns
+
+
 # ── Content Templates ──────────────────────────────────────────────
 
 MOTIVATION_TEMPLATES: dict[str, list[str]] = {
@@ -118,9 +126,10 @@ def _check_recently_sent(user_id: int, notif_type: str, hours: int = 24) -> bool
 
 # ── Job Functions ──────────────────────────────────────────────────
 
-async def check_morning_motivations(notification_service: NotificationService | None):
+async def check_morning_motivations():
     """Send morning motivation to users whose local time matches preferred_send_hour."""
-    if notification_service is None:
+    ns = _notification_service
+    if ns is None:
         logger.warning("Notification service not available, skipping morning motivation")
         return
 
@@ -148,7 +157,7 @@ async def check_morning_motivations(notification_service: NotificationService | 
             name = _get_name(settings.user_id)
             message = random.choice(FALLBACK_MOTIVATION).format(name=name)
 
-            await notification_service.send_to_user(
+            await ns.send_to_user(
                 user_id=settings.user_id,
                 title="Morning Motivation",
                 body=message,
@@ -162,9 +171,10 @@ async def check_morning_motivations(notification_service: NotificationService | 
         db.close()
 
 
-async def check_inactivity_nudges(notification_service: NotificationService | None):
+async def check_inactivity_nudges():
     """Send inactivity nudges to users who haven't worked out past their threshold."""
-    if notification_service is None:
+    ns = _notification_service
+    if ns is None:
         return
 
     db = SessionLocal()
@@ -185,7 +195,7 @@ async def check_inactivity_nudges(notification_service: NotificationService | No
             else:
                 body = random.choice(NO_WORKOUT_TEMPLATES).format(name=name)
 
-            await notification_service.send_to_user(
+            await ns.send_to_user(
                 user_id=user_id,
                 title="Don't Lose Your Streak",
                 body=body,
@@ -199,9 +209,10 @@ async def check_inactivity_nudges(notification_service: NotificationService | No
         db.close()
 
 
-async def check_milestones(notification_service: NotificationService | None):
+async def check_milestones():
     """Send milestone celebrations to users who hit new workout count thresholds."""
-    if notification_service is None:
+    ns = _notification_service
+    if ns is None:
         return
 
     db = SessionLocal()
@@ -220,7 +231,7 @@ async def check_milestones(notification_service: NotificationService | None):
                 f"That's {milestone_label}. Incredible consistency!"
             )
 
-            await notification_service.send_to_user(
+            await ns.send_to_user(
                 user_id=user_id,
                 title="Milestone Unlocked",
                 body=body,
@@ -256,12 +267,10 @@ def create_scheduler(database_url: str) -> AsyncIOScheduler:
     return scheduler
 
 
-def register_jobs(scheduler: AsyncIOScheduler, notification_service: NotificationService | None):
+def register_jobs(scheduler: AsyncIOScheduler):
     """Register the three notification job functions."""
-    from functools import partial
-
     scheduler.add_job(
-        partial(check_morning_motivations, notification_service),
+        check_morning_motivations,
         trigger=IntervalTrigger(minutes=30),
         id="check_morning_motivations",
         name="Check and send morning motivation notifications",
@@ -269,7 +278,7 @@ def register_jobs(scheduler: AsyncIOScheduler, notification_service: Notificatio
     )
 
     scheduler.add_job(
-        partial(check_inactivity_nudges, notification_service),
+        check_inactivity_nudges,
         trigger=IntervalTrigger(minutes=30),
         id="check_inactivity_nudges",
         name="Check and send inactivity nudge notifications",
@@ -277,7 +286,7 @@ def register_jobs(scheduler: AsyncIOScheduler, notification_service: Notificatio
     )
 
     scheduler.add_job(
-        partial(check_milestones, notification_service),
+        check_milestones,
         trigger=IntervalTrigger(minutes=30),
         id="check_milestones",
         name="Check and send milestone celebration notifications",

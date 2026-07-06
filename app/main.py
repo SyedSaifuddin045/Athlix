@@ -18,7 +18,7 @@ import json
 from app.notifications.providers import FCMProvider
 from app.notifications.service import NotificationService
 from app.notifications.repository import NotificationRepository as NotifRepo
-from app.notifications.scheduler import create_scheduler, register_jobs
+from app.notifications.scheduler import create_scheduler, register_jobs, set_notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -73,25 +73,6 @@ app.add_middleware(
 )
 
 app.add_middleware(SlowAPIMiddleware)
-
-def _normalize_pem_key(raw: str) -> str:
-    """Normalize PEM private key for Firebase credentials.
-
-    Handles three env-var storage formats:
-    1. Already properly formatted with actual newlines  → no-op
-    2. Literal ``\\n`` (two chars) instead of real newlines  → replace
-    3. Single continuous line (all newlines stripped)  → re-wrap at 64 chars
-    """
-    key = raw.replace("\\n", "\n").strip()
-    if "\n" not in key:
-        header = "-----BEGIN PRIVATE KEY-----"
-        footer = "-----END PRIVATE KEY-----"
-        if header in key and footer in key:
-            body = key.split(header, 1)[1].split(footer, 1)[0].strip()
-            lines = [body[i:i+64] for i in range(0, len(body), 64)]
-            key = header + "\n" + "\n".join(lines) + "\n" + footer
-    return key
-
 
 # -- Notification Service Initialization --
 if settings.fcm_service_account_json:
@@ -170,8 +151,9 @@ async def startup():
 
     # Start notification scheduler
     ns = getattr(app.state, "notification_service", None)
+    set_notification_service(ns)
     if ns is not None:
-        register_jobs(scheduler, ns)
+        register_jobs(scheduler)
         scheduler.start()
         logger.info("Notification scheduler started")
     else:
