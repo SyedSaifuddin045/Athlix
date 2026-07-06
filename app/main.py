@@ -74,13 +74,32 @@ app.add_middleware(
 
 app.add_middleware(SlowAPIMiddleware)
 
+def _normalize_pem_key(raw: str) -> str:
+    """Normalize PEM private key for Firebase credentials.
+
+    Handles three env-var storage formats:
+    1. Already properly formatted with actual newlines  → no-op
+    2. Literal ``\\n`` (two chars) instead of real newlines  → replace
+    3. Single continuous line (all newlines stripped)  → re-wrap at 64 chars
+    """
+    key = raw.replace("\\n", "\n").strip()
+    if "\n" not in key:
+        header = "-----BEGIN PRIVATE KEY-----"
+        footer = "-----END PRIVATE KEY-----"
+        if header in key and footer in key:
+            body = key.split(header, 1)[1].split(footer, 1)[0].strip()
+            lines = [body[i:i+64] for i in range(0, len(body), 64)]
+            key = header + "\n" + "\n".join(lines) + "\n" + footer
+    return key
+
+
 # -- Notification Service Initialization --
 if settings.fcm_project_id and settings.fcm_private_key:
     try:
         service_account_info = {
             "type": "service_account",
             "project_id": settings.fcm_project_id,
-            "private_key": settings.fcm_private_key.replace("\\n", "\n"),
+            "private_key": _normalize_pem_key(settings.fcm_private_key),
             "client_email": settings.fcm_client_email,
             "token_uri": "https://oauth2.googleapis.com/token",
         }
