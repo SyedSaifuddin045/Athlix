@@ -156,7 +156,7 @@ class NotificationRepository:
         """Return (user_id, timezone, last_workout_name, days_since) for inactive users."""
         from app.models.workout import WorkoutSession
 
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=threshold_hours)
+        cutoff = datetime.utcnow() - timedelta(hours=threshold_hours)
         subq = (
             select(
                 WorkoutSession.user_id,
@@ -189,7 +189,7 @@ class NotificationRepository:
             last_name = r[1]
             last_date = r[2]
             days_since = (
-                (datetime.now(timezone.utc) - last_date).days
+                (datetime.utcnow() - last_date).days
                 if last_date
                 else 999
             )

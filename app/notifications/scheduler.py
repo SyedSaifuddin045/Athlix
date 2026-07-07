@@ -10,7 +10,7 @@ Uses SQLAlchemyJobStore for persistent job storage in PostgreSQL.
 
 import logging
 import random
-from datetime import datetime, timezone
+from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -107,7 +107,7 @@ def _check_recently_sent(user_id: int, notif_type: str, hours: int = 24) -> bool
     from app.notifications.models import NotificationHistory
     db = SessionLocal()
     try:
-        cutoff = datetime.now(timezone.utc)
+        cutoff = datetime.utcnow()
         result = db.execute(
             select(NotificationHistory.id)
             .where(
