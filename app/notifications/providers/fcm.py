@@ -1,7 +1,7 @@
 import json
 import logging
 
-from firebase_admin import credentials, initialize_app, messaging
+from firebase_admin import credentials, exceptions, initialize_app, messaging
 
 from app.notifications.exceptions import ProviderNotAvailable
 from .base import NotificationProvider, ProviderResult
@@ -39,9 +39,9 @@ class FCMProvider(NotificationProvider):
         except messaging.UnregisteredError as exc:
             logger.warning("FCM token unregistered: %s", exc)
             return ProviderResult(success=False, error="NotRegistered")
-        except messaging.InvalidArgumentError as exc:
-            logger.warning("FCM invalid token: %s", exc)
-            return ProviderResult(success=False, error="InvalidToken")
+        except exceptions.InvalidArgumentError as exc:
+            logger.warning("FCM invalid argument: %s", exc)
+            return ProviderResult(success=False, error="InvalidArgument")
         except Exception as exc:
             logger.error("FCM send failed: %s", exc)
             return ProviderResult(success=False, error=str(exc))
