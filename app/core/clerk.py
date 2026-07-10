@@ -1,5 +1,6 @@
 import json
 import logging
+import time as time_module
 
 import jwt
 from jwt import PyJWKClient
@@ -9,6 +10,9 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 _jwks_client: PyJWKClient | None = None
+
+# Allow up to 30 seconds of clock skew between server and Clerk
+JWT_LEEWAY_SECONDS = 30
 
 
 def _get_jwks_client() -> PyJWKClient:
@@ -30,13 +34,35 @@ def verify_clerk_token(token: str) -> dict:
         logger.error("JWKS key fetch failed: %s", exc)
         raise
 
+    server_now = int(time_module.time())
+
     try:
         payload = jwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
             options={"verify_exp": True},
+            leeway=JWT_LEEWAY_SECONDS,
         )
+    except jwt.ExpiredSignatureError:
+        # Log diagnostic info before re-raising
+        try:
+            header = jwt.get_unverified_header(token)
+            body = jwt.decode(token, options={"verify_signature": False, "verify_exp": False})
+            exp_claim = body.get("exp", "missing")
+            iat_claim = body.get("iat", "missing")
+            logger.error(
+                "JWT expired. server_time=%d exp=%s iat=%s exp_diff=%s kid=%s sub=%s",
+                server_now,
+                exp_claim,
+                iat_claim,
+                exp_claim - server_now if isinstance(exp_claim, int) else "N/A",
+                header.get("kid", "missing"),
+                body.get("sub", "missing"),
+            )
+        except Exception as log_err:
+            logger.error("JWT expired (could not decode claims for diagnostics): %s", log_err)
+        raise
     except Exception as exc:
         logger.error("JWT decode failed: %s", exc)
         raise
